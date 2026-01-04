@@ -7,7 +7,8 @@ const AudioPlayer = ({ audioFile, onError }) => {
   const [loading, setLoading] = useState(false);
   const audioRef = useRef(null);
 
-  const audioUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/uploads/audio/${audioFile.filename}`;
+  // Use the new streaming endpoint
+  const audioUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/audio/${audioFile.id}/stream`;
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -50,7 +51,7 @@ const AudioPlayer = ({ audioFile, onError }) => {
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
     };
-  }, [audioFile, onError]);
+  }, [audioFile, onError, audioUrl]);
 
   const togglePlay = async () => {
     const audio = audioRef.current;

@@ -2,43 +2,109 @@
 (function() {
   'use strict';
   
-  // Store original console.error
-  const originalError = console.error;
+  console.log('🔇 Extension error suppression loaded');
   
-  // Override console.error to filter out extension-related errors
+  // Store original console methods
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  
+  // Extension-related error patterns to suppress
+  const extensionErrorPatterns = [
+    /Could not establish connection\. Receiving end does not exist/,
+    /Extension context invalidated/,
+    /The message port closed before a response was received/,
+    /chrome-extension:/,
+    /moz-extension:/,
+    /safari-extension:/,
+    /Unchecked runtime\.lastError/,
+    /Cannot access contents of/,
+    /Script error/,
+    /polyfill\.js/
+  ];
+  
+  // Audio-related error patterns that we want to handle gracefully
+  const audioErrorPatterns = [
+    /Failed to load resource.*\.mp3/,
+    /Failed to load resource.*\.wav/,
+    /Failed to load resource.*\.ogg/,
+    /Failed to load resource.*\.aac/,
+    /net::ERR_BLOCKED_BY_RESPONSE/,
+    /The element has no supported sources/,
+    /NotSupportedError/
+  ];
+  
+  function shouldSuppressError(message) {
+    const messageStr = String(message);
+    return extensionErrorPatterns.some(pattern => pattern.test(messageStr));
+  }
+  
+  function isAudioError(message) {
+    const messageStr = String(message);
+    return audioErrorPatterns.some(pattern => pattern.test(messageStr));
+  }
+  
+  // Override console.error
   console.error = function(...args) {
     const message = args.join(' ');
     
-    // Filter out common extension errors that don't affect the app
-    const extensionErrors = [
-      'Could not establish connection. Receiving end does not exist',
-      'Extension context invalidated',
-      'polyfill.js',
-      'chrome-extension://',
-      'moz-extension://',
-      'safari-extension://'
-    ];
-    
-    // Check if this is an extension error
-    const isExtensionError = extensionErrors.some(error => 
-      message.toLowerCase().includes(error.toLowerCase())
-    );
-    
-    // Only log non-extension errors
-    if (!isExtensionError) {
-      originalError.apply(console, args);
+    if (shouldSuppressError(message)) {
+      // Silently suppress extension errors
+      return;
     }
+    
+    if (isAudioError(message)) {
+      // Log audio errors with a prefix for easier debugging
+      originalError.apply(console, ['🎵 Audio error:', ...args]);
+      return;
+    }
+    
+    // Log all other errors normally
+    originalError.apply(console, args);
   };
   
-  // Also handle unhandled promise rejections from extensions
-  window.addEventListener('unhandledrejection', function(event) {
-    const message = event.reason?.message || event.reason || '';
+  // Override console.warn for extension warnings
+  console.warn = function(...args) {
+    const message = args.join(' ');
     
-    if (typeof message === 'string' && 
-        message.includes('Could not establish connection')) {
-      event.preventDefault(); // Prevent the error from showing
+    if (shouldSuppressError(message)) {
+      // Silently suppress extension warnings
+      return;
+    }
+    
+    // Log all other warnings normally
+    originalWarn.apply(console, args);
+  };
+  
+  // Handle unhandled promise rejections
+  window.addEventListener('unhandledrejection', function(event) {
+    const message = event.reason ? String(event.reason) : '';
+    
+    if (shouldSuppressError(message)) {
+      event.preventDefault();
+      return;
+    }
+    
+    if (isAudioError(message)) {
+      console.error('🎵 Unhandled audio error:', event.reason);
+      event.preventDefault();
+      return;
     }
   });
   
-  console.log('🔇 Extension error suppression loaded');
+  // Handle global errors
+  window.addEventListener('error', function(event) {
+    const message = event.message || '';
+    
+    if (shouldSuppressError(message)) {
+      event.preventDefault();
+      return;
+    }
+    
+    if (isAudioError(message)) {
+      console.error('🎵 Global audio error:', event.message, event.filename, event.lineno);
+      event.preventDefault();
+      return;
+    }
+  });
+  
 })();

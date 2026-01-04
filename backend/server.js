@@ -13,6 +13,7 @@ const logger = require('./src/config/logger');
 const { connectDB } = require('./src/config/database');
 const { apiLimiter } = require('./src/middleware/rateLimiter');
 const errorHandler = require('./src/middleware/errorHandler');
+const productionMiddleware = require('./src/middleware/production');
 
 // Import routes
 const authRoutes = require('./src/routes/auth');
@@ -40,6 +41,9 @@ const io = socketIo(server, {
 // Make io available to routes
 app.set('io', io);
 
+// Apply production middleware
+productionMiddleware(app);
+
 // CORS configuration
 const corsOptions = {
   origin: process.env.FRONTEND_URL || "http://localhost:3000",
@@ -64,6 +68,11 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Rate limiting
 app.use('/api/', apiLimiter);
 
+// Serve static files from React build in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../frontend/build')));
+}
+
 // Static files with proper headers for audio
 app.use('/uploads', (req, res, next) => {
   // Set CORS headers for audio files
@@ -86,7 +95,9 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV,
+    version: process.env.npm_package_version || '1.0.0'
   });
 });
 
@@ -100,6 +111,13 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/schedules', scheduleRoutes);
 app.use('/api/call-logs', callLogRoutes);
+
+// Serve React app in production
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
+  });
+}
 
 // Socket.IO connection handling
 require('./src/sockets/socketHandler')(io);
@@ -128,6 +146,10 @@ const startServer = async () => {
       logger.info(`🚀 Server running on port ${PORT}`);
       logger.info(`📱 Frontend URL: ${process.env.FRONTEND_URL}`);
       logger.info(`🌍 Environment: ${process.env.NODE_ENV}`);
+      
+      if (process.env.NODE_ENV === 'production') {
+        logger.info('🔒 Production security enabled');
+      }
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

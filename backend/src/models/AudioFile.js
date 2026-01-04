@@ -19,11 +19,6 @@ const AudioFile = sequelize.define('AudioFile', {
     type: DataTypes.STRING(255),
     allowNull: false
   },
-  filename: {
-    type: DataTypes.STRING(255),
-    allowNull: false,
-    unique: true
-  },
   mimeType: {
     type: DataTypes.STRING(50),
     allowNull: false
@@ -36,12 +31,9 @@ const AudioFile = sequelize.define('AudioFile', {
     type: DataTypes.FLOAT,
     allowNull: true
   },
-  path: {
-    type: DataTypes.STRING(500),
-    allowNull: false
-  },
-  url: {
-    type: DataTypes.STRING(500),
+  // Store audio file data directly in database as BLOB
+  audioData: {
+    type: DataTypes.BLOB('long'), // LONGBLOB for MySQL, BLOB for SQLite
     allowNull: false
   },
   category: {

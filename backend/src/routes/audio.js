@@ -140,15 +140,16 @@ router.post('/', auth, upload.single('audio'), [
 
     const { name, description, category = 'general', tags = [], isPublic = false } = req.body;
 
-    // Create audio file record
+    // Read file data into buffer for BLOB storage
+    const audioData = await fs.readFile(req.file.path);
+
+    // Create audio file record with BLOB data
     const audioFile = await AudioFile.create({
       name,
       originalName: req.file.originalname,
-      filename: req.file.filename,
       mimeType: req.file.mimetype,
       size: req.file.size,
-      path: req.file.path,
-      url: `/uploads/audio/${req.file.filename}`,
+      audioData, // Store file data as BLOB
       category,
       description,
       tags: Array.isArray(tags) ? tags : [],
@@ -156,12 +157,30 @@ router.post('/', auth, upload.single('audio'), [
       isPublic: Boolean(isPublic)
     });
 
+    // Clean up temporary file after storing in database
+    try {
+      await fs.unlink(req.file.path);
+    } catch (unlinkError) {
+      logger.warn('Failed to clean up temporary file:', unlinkError);
+    }
+
     logger.info(`Audio file uploaded: ${audioFile.name} by ${req.user.email}`);
 
     res.status(201).json({
       success: true,
       message: 'Audio file uploaded successfully',
-      data: audioFile
+      data: {
+        id: audioFile.id,
+        name: audioFile.name,
+        originalName: audioFile.originalName,
+        mimeType: audioFile.mimeType,
+        size: audioFile.size,
+        category: audioFile.category,
+        description: audioFile.description,
+        tags: audioFile.tags,
+        isPublic: audioFile.isPublic,
+        createdAt: audioFile.createdAt
+      }
     });
   } catch (error) {
     logger.error('Upload audio error:', error);
@@ -310,14 +329,7 @@ router.delete('/:id', auth, async (req, res) => {
       });
     }
 
-    // Delete physical file
-    try {
-      await fs.unlink(audioFile.path);
-    } catch (unlinkError) {
-      logger.warn('Failed to delete physical file:', unlinkError);
-    }
-
-    // Delete database record
+    // Delete database record (no need to delete physical file since it's stored as BLOB)
     await audioFile.destroy();
 
     logger.info(`Audio file deleted: ${audioFile.name} by ${req.user.email}`);
@@ -348,13 +360,11 @@ router.get('/:id/download', auth, async (req, res) => {
       });
     }
 
-    // Check if file exists
-    try {
-      await fs.access(audioFile.path);
-    } catch (error) {
+    // Check if audio data exists
+    if (!audioFile.audioData) {
       return res.status(404).json({
         success: false,
-        message: 'Physical file not found'
+        message: 'Audio data not found'
       });
     }
 
@@ -364,13 +374,76 @@ router.get('/:id/download', auth, async (req, res) => {
     // Set headers for download
     res.setHeader('Content-Disposition', `attachment; filename="${audioFile.originalName}"`);
     res.setHeader('Content-Type', audioFile.mimeType);
+    res.setHeader('Content-Length', audioFile.size);
 
-    // Send file
-    res.sendFile(path.resolve(audioFile.path));
+    // Send audio data from database
+    res.send(audioFile.audioData);
 
     logger.info(`Audio file downloaded: ${audioFile.name} by ${req.user.email}`);
   } catch (error) {
     logger.error('Download audio file error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   GET /api/audio/:id/stream
+// @desc    Stream audio file for playback
+// @access  Private
+router.get('/:id/stream', auth, async (req, res) => {
+  try {
+    const audioFile = await AudioFile.findByPk(req.params.id);
+    if (!audioFile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Audio file not found'
+      });
+    }
+
+    // Check if audio data exists
+    if (!audioFile.audioData) {
+      return res.status(404).json({
+        success: false,
+        message: 'Audio data not found'
+      });
+    }
+
+    // Set CORS headers for audio streaming
+    res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'http://localhost:3000');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Range, Accept-Ranges');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+    
+    // Set headers for audio streaming
+    res.setHeader('Content-Type', audioFile.mimeType);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Content-Length', audioFile.size);
+
+    // Handle range requests for audio seeking
+    const range = req.headers.range;
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : audioFile.size - 1;
+      const chunksize = (end - start) + 1;
+      
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${audioFile.size}`);
+      res.setHeader('Content-Length', chunksize);
+      
+      // Send partial content
+      res.send(audioFile.audioData.slice(start, end + 1));
+    } else {
+      // Send full audio data
+      res.send(audioFile.audioData);
+    }
+
+    logger.info(`Audio file streamed: ${audioFile.name} by ${req.user.email}`);
+  } catch (error) {
+    logger.error('Stream audio file error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

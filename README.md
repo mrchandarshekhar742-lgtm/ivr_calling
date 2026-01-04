@@ -1,252 +1,263 @@
-# IVR System - Complete Business Communication Platform
+# 🎯 IVR Call Management System
 
-A comprehensive web-based automated calling platform with IVR capabilities, featuring Android device integration for cost-effective business communications.
+A complete **IVR (Interactive Voice Response) Call Management System** built with React.js, Node.js, and MySQL. This system allows you to manage automated calling campaigns, audio files, contacts, and track call analytics.
 
-## 🎯 System Overview
+## 🚀 Features
 
-This IVR system provides a complete solution for automated calling campaigns with:
-- **Web Dashboard** - Campaign management, analytics, contact management
-- **Android Integration** - Use your own devices with SIM cards for calling
-- **Real-time Monitoring** - Live call progress and device status tracking
-- **Cost-Effective** - No monthly telephony charges when using Android devices
+### 📞 **Call Management**
+- Create and manage calling campaigns
+- Schedule automated calls
+- Real-time call tracking and logging
+- DTMF response collection
+- Call analytics and reporting
 
-## ✅ Current System Status
+### 🎵 **Audio Management**
+- Upload and manage audio files (MP3, WAV, AAC, OGG)
+- Database BLOB storage for security
+- Built-in audio player with controls
+- Audio streaming with range support
 
-**FULLY OPERATIONAL** - All components tested and working:
-- ✅ Backend Server (Node.js/Express)
-- ✅ Frontend Dashboard (Next.js/React)
-- ✅ Android App Integration (React Native)
-- ✅ Authentication System
-- ✅ Campaign Management
-- ✅ Contact Management (Individual + Bulk)
-- ✅ Real-time Analytics
-- ✅ WebSocket Communication
+### 👥 **Contact Management**
+- Import/export contacts (CSV support)
+- Contact grouping and categorization
+- Bulk contact operations
+- Contact history tracking
+
+### 📊 **Analytics & Reporting**
+- Real-time dashboard
+- Call success/failure rates
+- Campaign performance metrics
+- Export reports to CSV
+
+### 📱 **Mobile App**
+- React Native Android app
+- Real-time sync with backend
+- Call management on mobile
+- APK ready for distribution
+
+## 🛠️ Technology Stack
+
+- **Backend**: Node.js, Express.js, MySQL, Sequelize ORM, Socket.IO
+- **Frontend**: React.js, Tailwind CSS, React Router, React Query
+- **Mobile**: React Native for Android
+- **Authentication**: JWT tokens
+- **File Storage**: Database BLOB storage
+- **Real-time**: Socket.IO for live updates
 
 ## 🚀 Quick Start
 
-### 1. Start the System
+### **Development Setup**
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/mrchandarshekhar742-lgtm/ivr_calling.git
+   cd ivr_calling
+   ```
+
+2. **Backend Setup**
+   ```bash
+   cd backend
+   npm install
+   cp .env.example .env
+   # Edit .env with your database credentials
+   npm run dev
+   ```
+
+3. **Frontend Setup**
+   ```bash
+   cd frontend
+   npm install
+   echo "REACT_APP_API_URL=http://localhost:5000" > .env
+   npm run dev
+   ```
+
+4. **Access the application**
+   - **Web Interface**: http://localhost:3000
+   - **API**: http://localhost:5000
+   - **Health Check**: http://localhost:5000/health
+
+### **Production Deployment**
+
+For VPS deployment, follow the manual setup guide:
+
+**📚 See `MANUAL_VPS_SETUP.md` for complete deployment instructions**
+
+## 📱 Mobile App
+
+### **Android App Setup**
 ```bash
-# Start both backend and frontend
-node start-system.js
+cd IVRCallManager
+npm install
 
-# Or start individually:
-# Backend: cd backend && node server.js
-# Frontend: cd frontend && npm run dev
+# Build APK
+npm run build:android
+
+# Install on device
+npm run install:device
 ```
 
-### 2. Access the Dashboard
-- **URL**: http://localhost:3000
-- **Admin Login**: admin@ivrSystem.com / admin123
-- **Manager Login**: manager@ivrSystem.com / manager123
+## 🔧 Configuration
 
-### 3. Key Features Available
-- **Dashboard**: Real-time statistics and monitoring
-- **Campaigns**: Create and manage calling campaigns
-- **Contacts**: Add individual contacts or bulk import
-- **Analytics**: Performance metrics and reporting
-- **Android Devices**: Connect and monitor calling devices
+### **Backend Environment (.env)**
+```env
+NODE_ENV=development
+PORT=5000
+FRONTEND_URL=http://localhost:3000
 
-## 📱 Android Device Integration
+# Database
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=ivr_system
+DB_USER=root
+DB_PASSWORD=your_password
 
-### Setup Process
-1. **Install Android App**: Use the IVRCallManager app
-2. **Configure Connection**: Set WebSocket URL to your server
-3. **Grant Permissions**: Phone, microphone, and storage access
-4. **Connect Device**: Device will appear in dashboard
-5. **Start Calling**: Assign campaigns to connected devices
-
-### Device Features
-- **Real-time Status**: Battery, signal strength, network type
-- **Call Distribution**: Automatic call routing across devices
-- **DTMF Detection**: Capture user responses during calls
-- **Queue Management**: Handle multiple campaigns efficiently
-
-## 🏗️ Project Structure
-
-```
-ivr-system/
-├── backend/              # Node.js API server
-│   ├── src/             # Source code
-│   ├── server.js        # Main server file
-│   └── package.json     # Backend dependencies
-├── frontend/            # Next.js dashboard
-│   ├── src/             # React components and pages
-│   └── package.json     # Frontend dependencies
-├── IVRCallManager/      # React Native Android app
-│   ├── App.tsx          # Main app component
-│   └── package.json     # App dependencies
-├── start-system.js      # System startup script
-├── package.json         # Root package management
-├── README.md           # This file
-└── USER-GUIDE.md       # Detailed usage guide
+# JWT
+JWT_SECRET=your_jwt_secret
+JWT_EXPIRES_IN=24h
 ```
 
-## 🔧 System Requirements
+### **Frontend Environment (.env)**
+```env
+REACT_APP_API_URL=http://localhost:5000
+REACT_APP_ENVIRONMENT=development
+```
 
-### Prerequisites
-- **Node.js** 18+ installed
-- **npm** or **yarn** package manager
-- **Android devices** with SIM cards (for calling)
-- **Network connectivity** between devices and server
+## 🛡️ Security Features
 
-### No Database Required
-- System uses **in-memory storage** for development
-- All data persists during server runtime
-- Production can be upgraded to MySQL/PostgreSQL
+- **JWT Authentication** with refresh tokens
+- **Rate Limiting** (100 requests/15min)
+- **CORS Protection** with domain whitelisting
+- **Input Validation** on all endpoints
+- **SQL Injection Protection** with Sequelize ORM
+- **XSS Protection** with security headers
+- **File Upload Restrictions** and validation
 
-## 📊 Features Overview
+## 📊 API Endpoints
 
-### Campaign Management
-- **Create Campaigns**: Bulk calling with custom IVR flows
-- **Sequential Calling**: Automatic one-by-one calling
-- **Response Handling**: DTMF key press categorization
-- **Real-time Monitoring**: Live campaign progress tracking
+### **Authentication**
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/login` - User login
+- `POST /api/auth/refresh` - Refresh JWT token
 
-### Contact Management
-- **Individual Add**: Single contact with name, phone, email
-- **Bulk Import**: Up to 1000 contacts at once
-- **Smart Formatting**: Automatic +91 phone number formatting
-- **Duplicate Prevention**: Avoid duplicate entries
-- **Search & Filter**: Find contacts easily
+### **Campaigns**
+- `GET /api/campaigns` - List campaigns
+- `POST /api/campaigns` - Create campaign
+- `PUT /api/campaigns/:id` - Update campaign
+- `DELETE /api/campaigns/:id` - Delete campaign
 
-### Analytics & Reporting
-- **Dashboard Metrics**: Active calls, completion rates, success rates
-- **Device Statistics**: Connected devices, battery levels, signal strength
-- **Campaign Performance**: Call completion and response analytics
-- **Real-time Updates**: Live data refresh every 30 seconds
+### **Audio Files**
+- `GET /api/audio` - List audio files
+- `POST /api/audio` - Upload audio file
+- `GET /api/audio/:id/stream` - Stream audio file
+- `GET /api/audio/:id/download` - Download audio file
 
-### Android Device Management
-- **Device Registration**: Automatic device discovery
-- **Status Monitoring**: Real-time device health tracking
-- **Call Distribution**: Smart routing across available devices
-- **Queue Management**: Handle high-volume calling efficiently
+### **Analytics**
+- `GET /api/analytics` - Basic analytics
+- `GET /api/analytics/dashboard` - Dashboard data
+- `GET /api/analytics/campaigns` - Campaign analytics
 
-## 🎯 Usage Workflow
+## 🔄 Database Schema
 
-### 1. Campaign Creation
-1. Go to **Campaigns** → **Create Campaign**
-2. Set campaign name, description, and type
-3. Configure IVR flow and audio files
-4. Save campaign (status: draft)
+### **Main Tables**
+- **users** - User accounts and authentication
+- **campaigns** - Calling campaigns
+- **contacts** - Contact information
+- **audio_files** - Audio file metadata and BLOB data
+- **call_logs** - Call history and results
+- **call_schedules** - Scheduled calls
 
-### 2. Contact Management
-1. Go to **Contacts** → **Add Contact** (individual)
-2. Or use **Bulk Add** for multiple contacts
-3. Enter phone numbers (auto-formatted with +91)
-4. Contacts appear immediately in list
+## 📈 Performance Features
 
-### 3. Start Calling
-1. Ensure Android devices are connected
-2. Go to campaign → **Start Campaign**
-3. Monitor progress in real-time
-4. View responses and analytics
+- Database connection pooling
+- Gzip compression
+- Static file caching
+- Real-time updates with Socket.IO
+- Optimized BLOB storage for audio files
+- Rate limiting and security middleware
 
-### 4. Response Handling
-- **Press 1**: Interested leads
-- **Press 2**: Not interested
-- **Press 3**: Callback requested
-- **Press 9**: Remove from list
-- **No response**: Contacted status
+## 🧪 Testing
 
-## 💰 Cost Benefits
+```bash
+# Backend tests
+cd backend
+npm test
 
-### Android Devices vs Traditional Telephony
+# Frontend tests
+cd frontend
+npm test
+```
 
-| Aspect | Android Devices | Cloud Telephony |
-|--------|----------------|-----------------|
-| **Setup Cost** | ₹5,000-15,000 (one-time) | ₹0 |
-| **Monthly Cost** | ₹200-500/SIM | ₹500+ per number |
-| **Per Call Cost** | Normal mobile rates | ₹0.50-2.00/minute |
-| **Annual Savings** | 50-70% cost reduction | - |
-| **Control** | Full device control | Limited control |
-| **Scalability** | Add more devices | Pay per usage |
+## 📦 Project Structure
 
-## 🔍 Troubleshooting
+```
+ivr_calling/
+├── backend/                 # Node.js API server
+│   ├── src/                # Source code
+│   ├── uploads/            # File uploads
+│   ├── logs/               # Application logs
+│   └── server.js           # Main server file
+├── frontend/               # React.js application
+│   ├── src/                # React components
+│   ├── public/             # Static files
+│   └── build/              # Production build
+├── IVRCallManager/         # React Native mobile app
+│   ├── android/            # Android build files
+│   └── App.tsx             # Main app component
+└── MANUAL_VPS_SETUP.md     # Deployment guide
+```
 
-### Common Issues
+## 🚀 Deployment
 
-**Dashboard Not Loading:**
-- Check if backend is running on port 5000
-- Check if frontend is running on port 3000
-- Verify login credentials
+### **Manual VPS Deployment**
+Follow the step-by-step guide in `MANUAL_VPS_SETUP.md` for:
+- VPS setup and configuration
+- Database installation and setup
+- Application deployment
+- Process management with PM2
+- Firewall configuration
 
-**Android Device Not Connecting:**
-- Check WebSocket URL in app settings
-- Verify server IP address and port
-- Ensure device has internet connectivity
-- Check firewall settings
+### **Process Management**
+```bash
+# Start services
+pm2 start server.js --name "ivr-backend"
+pm2 serve build 3000 --name "ivr-frontend" --spa
 
-**Contacts Not Adding:**
-- Verify required fields (name and phone)
-- Check for duplicate phone numbers
-- Ensure proper phone number format
+# Monitor services
+pm2 status
+pm2 logs
 
-**Calls Not Working:**
-- Verify Android device is connected and available
-- Check SIM card has calling plan
-- Ensure phone permissions granted on device
-- Test with a single test call first
+# Restart services
+pm2 restart all
+```
 
-### Debug Steps
-1. **Check Server Health**: http://localhost:5000/health
-2. **Verify Login**: Use admin credentials to access dashboard
-3. **Test API Endpoints**: Check browser network tab for errors
-4. **Monitor Logs**: Check browser console for JavaScript errors
+## 🤝 Contributing
 
-## 📚 Documentation
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
-- **[USER-GUIDE.md](USER-GUIDE.md)** - Complete system usage guide
-- **[ANDROID-DEVICE-TELEPHONY.md](ANDROID-DEVICE-TELEPHONY.md)** - Android integration details
-- **[TELEPHONY-SETUP-GUIDE.md](TELEPHONY-SETUP-GUIDE.md)** - Setup instructions
-- **[CALL-FLOW-EXPLANATION.md](CALL-FLOW-EXPLANATION.md)** - How calling works
-- **[AUDIO-INTERACTION-TRACKING.md](AUDIO-INTERACTION-TRACKING.md)** - Audio handling
+## 📄 License
 
-## 🚀 Production Deployment
+This project is licensed under the MIT License.
 
-### Security Considerations
-- Use HTTPS for web dashboard
-- Use WSS for WebSocket connections
-- Implement proper authentication tokens
-- Set up firewall rules for required ports
+## 🆘 Support
 
-### Scaling Options
-- Add more Android devices for higher capacity
-- Implement device load balancing
-- Set up monitoring and alerting
-- Create backup and failover strategies
+- **Documentation**: Check `MANUAL_VPS_SETUP.md` for deployment
+- **Issues**: Create an issue on GitHub
+- **Repository**: https://github.com/mrchandarshekhar742-lgtm/ivr_calling
 
-### Performance Optimization
-- Use Redis for session management
-- Implement database for persistent storage
-- Set up CDN for static assets
-- Configure proper caching strategies
+## 🎯 Key Features Summary
 
-## 🎉 Success Indicators
-
-The system is ready when you see:
-- ✅ Backend server running on port 5000
-- ✅ Frontend dashboard accessible on port 3000
-- ✅ Successful login with provided credentials
-- ✅ Dashboard showing system statistics
-- ✅ Ability to create campaigns and add contacts
-- ✅ Android devices connecting and showing in dashboard
-
-## 📞 Support & Maintenance
-
-### Regular Maintenance
-- Monitor device battery levels and connectivity
-- Review campaign performance and optimize
-- Update contact lists regularly
-- Check system logs for any issues
-
-### System Updates
-- Keep Node.js and dependencies updated
-- Update Android app when new versions available
-- Monitor system performance and scale as needed
-- Backup important campaign and contact data
+- ✅ **Complete IVR System** - Web dashboard + Mobile app
+- ✅ **Manual Deployment Ready** - Simple VPS setup
+- ✅ **Database BLOB Storage** - Secure audio file management
+- ✅ **Real-time Updates** - Socket.IO integration
+- ✅ **Production Security** - JWT, rate limiting, CORS
+- ✅ **Mobile Integration** - Android app with APK
+- ✅ **Easy Management** - PM2 process management
 
 ---
 
-**Your complete IVR system is ready for business use!** 🚀
-
-Start by accessing the dashboard at http://localhost:3000 with admin@ivrSystem.com / admin123
+**Ready for production deployment! Follow MANUAL_VPS_SETUP.md for VPS setup.**
