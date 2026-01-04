@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api.js';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
+import AudioPlayer from '../components/AudioPlayer.jsx';
+import { testAllFunctions, checkServerStatus } from '../utils/testAllFunctions.js';
 
 const AudioFiles = () => {
   const [audioFiles, setAudioFiles] = useState([]);
@@ -8,6 +10,8 @@ const AudioFiles = () => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [showUploadForm, setShowUploadForm] = useState(false);
+  const [selectedAudio, setSelectedAudio] = useState(null);
+  const [testing, setTesting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -23,7 +27,7 @@ const AudioFiles = () => {
     try {
       setLoading(true);
       const response = await api.get('/api/audio');
-      setAudioFiles(response.data.audioFiles || []);
+      setAudioFiles(response.data.data?.audioFiles || []);
     } catch (err) {
       setError('Failed to fetch audio files');
       console.error('Fetch audio files error:', err);
@@ -85,7 +89,7 @@ const AudioFiles = () => {
   const handleDelete = async (audioId) => {
     if (window.confirm('Are you sure you want to delete this audio file?')) {
       try {
-        await api.delete(`/audio/${audioId}`);
+        await api.delete(`/api/audio/${audioId}`);
         fetchAudioFiles();
       } catch (err) {
         setError(err.response?.data?.message || 'Failed to delete audio file');
@@ -96,7 +100,7 @@ const AudioFiles = () => {
 
   const handleDownload = async (audioId, filename) => {
     try {
-      const response = await api.get(`/audio/${audioId}/download`, {
+      const response = await api.get(`/api/audio/${audioId}/download`, {
         responseType: 'blob'
       });
       
@@ -129,6 +133,39 @@ const AudioFiles = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const runSystemTest = async () => {
+    setTesting(true);
+    try {
+      console.log('🧪 Running comprehensive system test...');
+      await testAllFunctions();
+    } catch (error) {
+      console.error('Test failed:', error);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const checkServer = async () => {
+    setTesting(true);
+    try {
+      console.log('🔍 Checking server status...');
+      const status = await checkServerStatus();
+      
+      if (!status.serverRunning) {
+        setError('❌ Backend server is not running on port 5000. Please start it with: cd backend && npm start');
+      } else if (!status.analyticsWorking) {
+        setError('⚠️ Server is running but analytics route is missing. Please restart the backend server to apply recent changes.');
+      } else {
+        setError('✅ Server is running correctly! All endpoints should work.');
+      }
+    } catch (error) {
+      console.error('Server check failed:', error);
+      setError('Failed to check server status');
+    } finally {
+      setTesting(false);
+    }
+  };
+
   if (loading) return <LoadingSpinner />;
 
   return (
@@ -139,12 +176,28 @@ const AudioFiles = () => {
           <h1 className="text-2xl font-bold text-gray-900">Audio Files</h1>
           <p className="text-gray-600">Manage your IVR audio files</p>
         </div>
-        <button
-          onClick={() => setShowUploadForm(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Upload Audio
-        </button>
+        <div className="flex space-x-2">
+          <button
+            onClick={checkServer}
+            disabled={testing}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+          >
+            {testing ? 'Checking...' : 'Check Server'}
+          </button>
+          <button
+            onClick={runSystemTest}
+            disabled={testing}
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+          >
+            {testing ? 'Testing...' : 'Test System'}
+          </button>
+          <button
+            onClick={() => setShowUploadForm(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Upload Audio
+          </button>
+        </div>
       </div>
 
       {/* Error Message */}
@@ -304,51 +357,67 @@ const AudioFiles = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {audioFiles.map((file) => (
-                  <tr key={file.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{file.name}</div>
-                        <div className="text-sm text-gray-500">{file.originalName}</div>
-                        {file.description && (
-                          <div className="text-sm text-gray-500">{file.description}</div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800 capitalize">
-                        {file.category}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatDuration(file.duration)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatFileSize(file.size)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {file.usageCount || 0} campaigns
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(file.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                      <button
-                        onClick={() => handleDownload(file.id, file.originalName)}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        Download
-                      </button>
-                      <button className="text-green-600 hover:text-green-900">
-                        Play
-                      </button>
-                      <button
-                        onClick={() => handleDelete(file.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
+                  <React.Fragment key={file.id}>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{file.name}</div>
+                          <div className="text-sm text-gray-500">{file.originalName}</div>
+                          {file.description && (
+                            <div className="text-sm text-gray-500">{file.description}</div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800 capitalize">
+                          {file.category}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatDuration(file.duration)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatFileSize(file.size)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {file.usageCount || 0} campaigns
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(file.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        <button
+                          onClick={() => handleDownload(file.id, file.originalName)}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          Download
+                        </button>
+                        <button 
+                          onClick={() => setSelectedAudio(selectedAudio?.id === file.id ? null : file)}
+                          className="text-green-600 hover:text-green-900"
+                        >
+                          {selectedAudio?.id === file.id ? 'Hide Player' : 'Play'}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(file.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                    {/* Audio Player Row */}
+                    {selectedAudio?.id === file.id && (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-4 bg-gray-50">
+                          <AudioPlayer 
+                            audioFile={selectedAudio} 
+                            onError={(errorMsg) => setError(errorMsg)}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

@@ -15,9 +15,18 @@ router.get('/', auth, [
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('status').optional().isIn(['completed', 'failed', 'no-answer', 'busy', 'pending']),
-  query('campaignId').optional().isInt({ min: 1 }),
-  query('startDate').optional().isISO8601(),
-  query('endDate').optional().isISO8601(),
+  query('campaignId').optional().custom(value => {
+    if (value === '' || value === undefined || value === null) return true;
+    return Number.isInteger(parseInt(value)) && parseInt(value) > 0;
+  }),
+  query('startDate').optional().custom(value => {
+    if (value === '' || value === undefined || value === null) return true;
+    return !isNaN(Date.parse(value));
+  }),
+  query('endDate').optional().custom(value => {
+    if (value === '' || value === undefined || value === null) return true;
+    return !isNaN(Date.parse(value));
+  }),
   query('search').optional().isString()
 ], async (req, res) => {
   try {
@@ -164,9 +173,18 @@ router.get('/:id', auth, async (req, res) => {
 // @access  Private
 router.get('/export/csv', auth, [
   query('status').optional().isIn(['completed', 'failed', 'no-answer', 'busy', 'pending']),
-  query('campaignId').optional().isInt({ min: 1 }),
-  query('startDate').optional().isISO8601(),
-  query('endDate').optional().isISO8601(),
+  query('campaignId').optional().custom(value => {
+    if (value === '' || value === undefined || value === null) return true;
+    return Number.isInteger(parseInt(value)) && parseInt(value) > 0;
+  }),
+  query('startDate').optional().custom(value => {
+    if (value === '' || value === undefined || value === null) return true;
+    return !isNaN(Date.parse(value));
+  }),
+  query('endDate').optional().custom(value => {
+    if (value === '' || value === undefined || value === null) return true;
+    return !isNaN(Date.parse(value));
+  }),
   query('search').optional().isString()
 ], async (req, res) => {
   try {

@@ -7,6 +7,65 @@ const logger = require('../config/logger');
 
 const router = express.Router();
 
+// @route   GET /api/analytics
+// @desc    Get basic analytics overview
+// @access  Private
+router.get('/', auth, async (req, res) => {
+  try {
+    // Get basic counts for current user only
+    const userFilter = { createdBy: req.user.id };
+
+    const [
+      totalCampaigns,
+      activeCampaigns,
+      totalContacts,
+      totalAudioFiles
+    ] = await Promise.all([
+      Campaign.count({ where: userFilter }),
+      Campaign.count({ where: { ...userFilter, status: 'running' } }),
+      Contact.count({ where: userFilter }),
+      AudioFile.count({ where: { uploadedBy: req.user.id } })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        overview: {
+          totalCampaigns,
+          activeCampaigns,
+          totalContacts,
+          totalAudioFiles
+        }
+      }
+    });
+  } catch (error) {
+    logger.error('Get analytics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   GET /api/analytics/test
+// @desc    Test analytics endpoint (no auth required)
+// @access  Public
+router.get('/test', async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      message: 'Analytics endpoint is working',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Analytics test error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
 // @route   GET /api/analytics/dashboard
 // @desc    Get dashboard analytics
 // @access  Private

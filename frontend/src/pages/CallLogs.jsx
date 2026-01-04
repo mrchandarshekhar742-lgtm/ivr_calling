@@ -29,9 +29,10 @@ const CallLogs = () => {
     const fetchCampaigns = async () => {
       try {
         const response = await api.get('/api/campaigns');
-        setCampaigns(response.data.data || []);
+        setCampaigns(response.data.data?.campaigns || []);
       } catch (error) {
         console.error('Failed to fetch campaigns:', error);
+        setCampaigns([]); // Ensure campaigns is always an array
       }
     };
     fetchCampaigns();
@@ -40,14 +41,20 @@ const CallLogs = () => {
   // Fetch call logs
   const { data: callLogsData, isLoading, refetch } = useQuery(
     ['callLogs', page, filters],
-    () => api.get('/api/call-logs', {
-      params: {
+    () => {
+      // Filter out empty string parameters
+      const cleanParams = {
         page,
         limit: 20,
-        ...filters,
-        status: filters.status === 'all' ? undefined : filters.status
-      }
-    }),
+        ...(filters.status && filters.status !== 'all' && { status: filters.status }),
+        ...(filters.campaignId && { campaignId: filters.campaignId }),
+        ...(filters.startDate && { startDate: filters.startDate }),
+        ...(filters.endDate && { endDate: filters.endDate }),
+        ...(filters.search && { search: filters.search })
+      };
+      
+      return api.get('/api/call-logs', { params: cleanParams });
+    },
     {
       keepPreviousData: true,
       refetchInterval: 30000 // Refresh every 30 seconds
@@ -64,8 +71,17 @@ const CallLogs = () => {
 
   const exportCallLogs = async () => {
     try {
-      const response = await api.get('/api/call-logs/export', {
-        params: filters,
+      // Filter out empty string parameters for export
+      const cleanParams = {
+        ...(filters.status && filters.status !== 'all' && { status: filters.status }),
+        ...(filters.campaignId && { campaignId: filters.campaignId }),
+        ...(filters.startDate && { startDate: filters.startDate }),
+        ...(filters.endDate && { endDate: filters.endDate }),
+        ...(filters.search && { search: filters.search })
+      };
+      
+      const response = await api.get('/api/call-logs/export/csv', {
+        params: cleanParams,
         responseType: 'blob'
       });
       
@@ -182,7 +198,7 @@ const CallLogs = () => {
             onChange={(e) => handleFilterChange('campaignId', e.target.value)}
           >
             <option value="">All Campaigns</option>
-            {campaigns.map(campaign => (
+            {Array.isArray(campaigns) && campaigns.map(campaign => (
               <option key={campaign.id} value={campaign.id}>
                 {campaign.name}
               </option>

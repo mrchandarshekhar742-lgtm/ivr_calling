@@ -17,7 +17,7 @@ const Campaigns = () => {
     try {
       setLoading(true);
       const response = await api.get('/api/campaigns');
-      setCampaigns(response.data.campaigns || []);
+      setCampaigns(response.data.data?.campaigns || []);
     } catch (err) {
       setError('Failed to fetch campaigns');
       console.error('Fetch campaigns error:', err);
@@ -28,7 +28,7 @@ const Campaigns = () => {
 
   const handleStatusChange = async (campaignId, action) => {
     try {
-      await api.post(`/campaigns/${campaignId}/${action}`);
+      await api.post(`/api/campaigns/${campaignId}/${action}`);
       fetchCampaigns(); // Refresh the list
     } catch (err) {
       setError(`Failed to ${action} campaign`);
@@ -39,7 +39,7 @@ const Campaigns = () => {
   const handleDelete = async (campaignId) => {
     if (window.confirm('Are you sure you want to delete this campaign?')) {
       try {
-        await api.delete(`/campaigns/${campaignId}`);
+        await api.delete(`/api/campaigns/${campaignId}`);
         fetchCampaigns(); // Refresh the list
       } catch (err) {
         setError('Failed to delete campaign');

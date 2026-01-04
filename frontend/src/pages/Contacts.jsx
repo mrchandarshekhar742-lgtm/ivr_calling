@@ -23,7 +23,7 @@ const Contacts = () => {
     try {
       setLoading(true);
       const response = await api.get('/api/contacts');
-      setContacts(response.data.contacts || []);
+      setContacts(response.data.data?.contacts || []);
     } catch (err) {
       setError('Failed to fetch contacts');
       console.error('Fetch contacts error:', err);
@@ -56,7 +56,7 @@ const Contacts = () => {
   const handleDelete = async (contactId) => {
     if (window.confirm('Are you sure you want to delete this contact?')) {
       try {
-        await api.delete(`/contacts/${contactId}`);
+        await api.delete(`/api/contacts/${contactId}`);
         fetchContacts();
       } catch (err) {
         setError('Failed to delete contact');

@@ -34,8 +34,8 @@ const CallScheduler = () => {
         api.get('/api/campaigns')
       ]);
       
-      setSchedules(schedulesRes.data.data || []);
-      setCampaigns(campaignsRes.data.data || []);
+      setSchedules(schedulesRes.data.data || schedulesRes.data || []);
+      setCampaigns(campaignsRes.data.data?.campaigns || []);
     } catch (error) {
       toast.error('Failed to fetch data');
     } finally {

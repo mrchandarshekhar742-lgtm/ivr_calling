@@ -177,7 +177,7 @@ const Analytics = () => {
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Call Statistics</h3>
           <div className="space-y-4">
-            {calls.callStats.map((stat, index) => (
+            {Array.isArray(calls.callStats) && calls.callStats.map((stat, index) => (
               <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div>
                   <p className="text-sm font-medium text-gray-900">{stat.period}</p>
@@ -223,7 +223,7 @@ const Analytics = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {campaigns.slice(0, 10).map((campaign) => (
+                {Array.isArray(campaigns) && campaigns.slice(0, 10).map((campaign) => (
                   <tr key={campaign.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">{campaign.name}</div>
