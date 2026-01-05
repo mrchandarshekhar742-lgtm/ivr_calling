@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import api from '../utils/api.js';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
