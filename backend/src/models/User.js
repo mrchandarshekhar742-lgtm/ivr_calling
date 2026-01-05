@@ -43,7 +43,7 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(20),
     allowNull: true,
     validate: {
-      is: /^[\+]?[1-9][\d]{0,15}$/
+      len: [10, 20]
     }
   },
   role: {
@@ -64,15 +64,18 @@ const User = sequelize.define('User', {
   }
 }, {
   tableName: 'users',
+  timestamps: true,
   hooks: {
     beforeCreate: async (user) => {
       if (user.password) {
-        user.password = await bcrypt.hash(user.password, 12);
+        const salt = await bcrypt.genSalt(12);
+        user.password = await bcrypt.hash(user.password, salt);
       }
     },
     beforeUpdate: async (user) => {
       if (user.changed('password')) {
-        user.password = await bcrypt.hash(user.password, 12);
+        const salt = await bcrypt.genSalt(12);
+        user.password = await bcrypt.hash(user.password, salt);
       }
     }
   }
@@ -80,7 +83,11 @@ const User = sequelize.define('User', {
 
 // Instance methods
 User.prototype.comparePassword = async function(candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+  try {
+    return await bcrypt.compare(candidatePassword, this.password);
+  } catch (error) {
+    throw new Error('Password comparison failed');
+  }
 };
 
 User.prototype.getFullName = function() {
@@ -92,6 +99,22 @@ User.prototype.toJSON = function() {
   delete values.password;
   delete values.refreshToken;
   return values;
+};
+
+// Static methods
+User.findByEmail = async function(email) {
+  return await this.findOne({ where: { email } });
+};
+
+User.createUser = async function(userData) {
+  try {
+    return await this.create(userData);
+  } catch (error) {
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      throw new Error('User with this email already exists');
+    }
+    throw error;
+  }
 };
 
 module.exports = User;
