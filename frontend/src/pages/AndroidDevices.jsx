@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../utils/api.js';
 import { toast } from 'react-hot-toast';
 
 const AndroidDevices = () => {
   const [showAddDevice, setShowAddDevice] = useState(false);
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState(null);
   const [deviceForm, setDeviceForm] = useState({
     deviceId: '',
     deviceName: '',
-    androidVersion: ''
+    androidVersion: '',
+    deviceModel: '',
+    appVersion: ''
   });
 
   const queryClient = useQueryClient();
@@ -24,14 +28,46 @@ const AndroidDevices = () => {
   const registerDeviceMutation = useMutation(
     (deviceData) => api.post('/api/devices/register', deviceData),
     {
-      onSuccess: () => {
+      onSuccess: (response) => {
         toast.success('Device registered successfully!');
         queryClient.invalidateQueries('devices');
         setShowAddDevice(false);
-        setDeviceForm({ deviceId: '', deviceName: '', androidVersion: '' });
+        setDeviceForm({ deviceId: '', deviceName: '', androidVersion: '', deviceModel: '', appVersion: '' });
+        
+        // Show token modal with device info
+        setSelectedDevice(response.data.data);
+        setShowTokenModal(true);
       },
       onError: (error) => {
         toast.error(error.response?.data?.message || 'Failed to register device');
+      }
+    }
+  );
+
+  // Remove device mutation
+  const removeDeviceMutation = useMutation(
+    (deviceId) => api.delete(`/api/devices/${deviceId}`),
+    {
+      onSuccess: () => {
+        toast.success('Device removed successfully!');
+        queryClient.invalidateQueries('devices');
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.message || 'Failed to remove device');
+      }
+    }
+  );
+
+  // Test device mutation
+  const testDeviceMutation = useMutation(
+    (deviceId) => api.post(`/api/devices/${deviceId}/test`),
+    {
+      onSuccess: (response) => {
+        toast.success(response.data.message || 'Device test successful!');
+        queryClient.invalidateQueries('devices');
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.message || 'Device test failed');
       }
     }
   );
@@ -43,6 +79,21 @@ const AndroidDevices = () => {
       return;
     }
     registerDeviceMutation.mutate(deviceForm);
+  };
+
+  const handleRemoveDevice = (deviceId, deviceName) => {
+    if (window.confirm(`Are you sure you want to remove "${deviceName}"?`)) {
+      removeDeviceMutation.mutate(deviceId);
+    }
+  };
+
+  const handleTestDevice = (deviceId) => {
+    testDeviceMutation.mutate(deviceId);
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    toast.success('Copied to clipboard!');
   };
 
   const devices = devicesData?.data?.devices || [];
@@ -78,8 +129,8 @@ const AndroidDevices = () => {
           <li>Install the IVR Call Manager app on your Android device</li>
           <li>Open the app and go to Settings</li>
           <li>Enter Server URL: <code className="bg-blue-100 px-1 rounded">https://ivr.wxon.in</code></li>
-          <li>Click "Register Device" and copy the Device ID</li>
-          <li>Add the device here using the Device ID</li>
+          <li>Register the device here to get your device token</li>
+          <li>Enter the token in the app to connect</li>
         </ol>
       </div>
 
@@ -98,7 +149,7 @@ const AndroidDevices = () => {
                   value={deviceForm.deviceId}
                   onChange={(e) => setDeviceForm({ ...deviceForm, deviceId: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter device ID from app"
+                  placeholder="Enter unique device ID"
                   required
                 />
               </div>
@@ -113,6 +164,18 @@ const AndroidDevices = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="e.g., Samsung Galaxy S21"
                   required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Device Model
+                </label>
+                <input
+                  type="text"
+                  value={deviceForm.deviceModel}
+                  onChange={(e) => setDeviceForm({ ...deviceForm, deviceModel: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g., SM-G991B"
                 />
               </div>
               <div>
@@ -148,6 +211,65 @@ const AndroidDevices = () => {
         </div>
       )}
 
+      {/* Token Modal */}
+      {showTokenModal && selectedDevice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+            <h2 className="text-xl font-bold mb-4">🎉 Device Registered Successfully!</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Device Token (Copy this to your Android app):
+                </label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={selectedDevice.token}
+                    readOnly
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
+                  />
+                  <button
+                    onClick={() => copyToClipboard(selectedDevice.token)}
+                    className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+              
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h4 className="font-semibold text-green-900 mb-2">📋 Next Steps:</h4>
+                <ol className="list-decimal list-inside space-y-1 text-green-800 text-sm">
+                  <li>Copy the token above</li>
+                  <li>Open IVR Call Manager app on your Android device</li>
+                  <li>Go to Settings → Server Configuration</li>
+                  <li>Paste the token in the "Device Token" field</li>
+                  <li>Click "Connect to Server"</li>
+                </ol>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-3">
+                <h4 className="font-medium text-gray-900 mb-2">Device Information:</h4>
+                <div className="text-sm text-gray-600 space-y-1">
+                  <p><strong>Name:</strong> {selectedDevice.deviceName}</p>
+                  <p><strong>ID:</strong> {selectedDevice.deviceId}</p>
+                  <p><strong>Server URL:</strong> {selectedDevice.instructions?.serverUrl}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex justify-end pt-4">
+              <button
+                onClick={() => setShowTokenModal(false)}
+                className="bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Devices List */}
       <div className="bg-white rounded-lg shadow">
         {devices.length === 0 ? (
@@ -176,10 +298,10 @@ const AndroidDevices = () => {
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Android Version
+                    Token
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Registered
+                    Last Seen
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -197,28 +319,57 @@ const AndroidDevices = () => {
                         <div className="text-sm text-gray-500">
                           ID: {device.deviceId}
                         </div>
+                        <div className="text-xs text-gray-400">
+                          {device.deviceModel} • {device.androidVersion}
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        device.status === 'active' 
+                        device.status === 'active' || device.status === 'online'
                           ? 'bg-green-100 text-green-800' 
+                          : device.status === 'busy'
+                          ? 'bg-yellow-100 text-yellow-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {device.status === 'active' ? '🟢 Online' : '🔴 Offline'}
+                        {device.status === 'active' || device.status === 'online' ? '🟢 Online' : 
+                         device.status === 'busy' ? '🟡 Busy' : '🔴 Offline'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {device.androidVersion || 'Unknown'}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                          {device.tokenPreview || 'No token'}
+                        </code>
+                        {device.tokenPreview && (
+                          <button
+                            onClick={() => {
+                              setSelectedDevice(device);
+                              setShowTokenModal(true);
+                            }}
+                            className="text-blue-600 hover:text-blue-900 text-xs"
+                          >
+                            View Full
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(device.registeredAt).toLocaleDateString()}
+                      {device.lastSeen ? new Date(device.lastSeen).toLocaleString() : 'Never'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button className="text-blue-600 hover:text-blue-900 mr-3">
-                        Test Connection
+                      <button 
+                        onClick={() => handleTestDevice(device.deviceId)}
+                        disabled={testDeviceMutation.isLoading}
+                        className="text-green-600 hover:text-green-900 mr-3 disabled:opacity-50"
+                      >
+                        Test
                       </button>
-                      <button className="text-red-600 hover:text-red-900">
+                      <button 
+                        onClick={() => handleRemoveDevice(device.deviceId, device.deviceName)}
+                        disabled={removeDeviceMutation.isLoading}
+                        className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                      >
                         Remove
                       </button>
                     </td>
