@@ -43,7 +43,8 @@ router.get('/', auth, [
         {
           model: AudioFile,
           as: 'audioFile',
-          attributes: ['id', 'filename', 'originalName', 'duration']
+          attributes: ['id', 'name', 'originalName', 'size'],
+          required: false
         },
         {
           model: User,
@@ -87,7 +88,8 @@ router.get('/:id', auth, async (req, res) => {
         {
           model: AudioFile,
           as: 'audioFile',
-          attributes: ['id', 'filename', 'originalName', 'duration', 'fileSize']
+          attributes: ['id', 'name', 'originalName', 'size'],
+          required: false
         },
         {
           model: User,
@@ -168,7 +170,8 @@ router.post('/', auth, [
         {
           model: AudioFile,
           as: 'audioFile',
-          attributes: ['id', 'filename', 'originalName', 'duration']
+          attributes: ['id', 'name', 'originalName', 'size'],
+          required: false
         }
       ]
     });
@@ -255,7 +258,8 @@ router.put('/:id', auth, [
         {
           model: AudioFile,
           as: 'audioFile',
-          attributes: ['id', 'filename', 'originalName', 'duration']
+          attributes: ['id', 'name', 'originalName', 'size'],
+          required: false
         }
       ]
     });
@@ -343,7 +347,8 @@ router.post('/:id/duplicate', auth, async (req, res) => {
         {
           model: AudioFile,
           as: 'audioFile',
-          attributes: ['id', 'filename', 'originalName', 'duration']
+          attributes: ['id', 'name', 'originalName', 'size'],
+          required: false
         }
       ]
     });
