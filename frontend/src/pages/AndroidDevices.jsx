@@ -1,81 +1,57 @@
 import React, { useState, useEffect } from 'react';
-import api from '../utils/api.js';
-import LoadingSpinner from '../components/LoadingSpinner.jsx';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '../utils/api';
+import { toast } from 'react-hot-toast';
 
 const AndroidDevices = () => {
-  const [devices, setDevices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [showAddDevice, setShowAddDevice] = useState(false);
+  const [deviceForm, setDeviceForm] = useState({
+    deviceId: '',
+    deviceName: '',
+    androidVersion: ''
+  });
 
-  useEffect(() => {
-    fetchDevices();
-    
-    // Set up polling for device status
-    const interval = setInterval(fetchDevices, 10000); // Poll every 10 seconds
-    
-    return () => clearInterval(interval);
-  }, []);
+  const queryClient = useQueryClient();
 
-  const fetchDevices = async () => {
-    try {
-      const response = await api.get('/api/devices');
-      setDevices(response.data.devices || []);
-      setError('');
-    } catch (err) {
-      setError('Failed to fetch devices');
-      console.error('Fetch devices error:', err);
-    } finally {
-      setLoading(false);
+  // Fetch devices
+  const { data: devicesData, isLoading, error } = useQuery({
+    queryKey: ['devices'],
+    queryFn: () => api.get('/devices'),
+    retry: 1
+  });
+
+  // Register device mutation
+  const registerDeviceMutation = useMutation({
+    mutationFn: (deviceData) => api.post('/devices/register', deviceData),
+    onSuccess: () => {
+      toast.success('Device registered successfully!');
+      queryClient.invalidateQueries(['devices']);
+      setShowAddDevice(false);
+      setDeviceForm({ deviceId: '', deviceName: '', androidVersion: '' });
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to register device');
     }
-  };
+  });
 
-  const handleAssignCampaign = async (deviceId, campaignId) => {
-    try {
-      await api.post(`/devices/${deviceId}/assign-campaign`, { campaignId });
-      fetchDevices();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to assign campaign');
-      console.error('Assign campaign error:', err);
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!deviceForm.deviceId || !deviceForm.deviceName) {
+      toast.error('Device ID and Name are required');
+      return;
     }
+    registerDeviceMutation.mutate(deviceForm);
   };
 
-  const handleUnregisterDevice = async (deviceId) => {
-    if (window.confirm('Are you sure you want to unregister this device?')) {
-      try {
-        await api.delete(`/devices/${deviceId}`);
-        fetchDevices();
-      } catch (err) {
-        setError('Failed to unregister device');
-        console.error('Unregister device error:', err);
-      }
-    }
-  };
+  const devices = devicesData?.data?.devices || [];
 
-  const getStatusColor = (status, isOnline) => {
-    if (!isOnline) return 'bg-gray-100 text-gray-800';
-    
-    switch (status) {
-      case 'online': return 'bg-green-100 text-green-800';
-      case 'busy': return 'bg-yellow-100 text-yellow-800';
-      case 'idle': return 'bg-blue-100 text-blue-800';
-      case 'offline': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const formatLastSeen = (lastSeen) => {
-    const now = Date.now();
-    const diff = now - lastSeen;
-    
-    if (diff < 30000) return 'Just now';
-    if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`;
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-    
-    return new Date(lastSeen).toLocaleDateString();
-  };
-
-  if (loading) return <LoadingSpinner />;
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -83,103 +59,108 @@ const AndroidDevices = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Android Devices</h1>
-          <p className="text-gray-600">Manage connected Android devices for IVR calls</p>
+          <p className="text-gray-600">Manage your connected Android devices for IVR calling</p>
         </div>
-        <div className="text-sm text-gray-500">
-          Auto-refresh every 10 seconds
-        </div>
+        <button
+          onClick={() => setShowAddDevice(true)}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Add Device
+        </button>
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
+      {/* Connection Instructions */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h3 className="font-semibold text-blue-900 mb-2">📱 How to Connect Your Android Device:</h3>
+        <ol className="list-decimal list-inside space-y-1 text-blue-800 text-sm">
+          <li>Install the IVR Call Manager app on your Android device</li>
+          <li>Open the app and go to Settings</li>
+          <li>Enter Server URL: <code className="bg-blue-100 px-1 rounded">https://ivr.wxon.in</code></li>
+          <li>Click "Register Device" and copy the Device ID</li>
+          <li>Add the device here using the Device ID</li>
+        </ol>
+      </div>
+
+      {/* Add Device Modal */}
+      {showAddDevice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Add Android Device</h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Device ID *
+                </label>
+                <input
+                  type="text"
+                  value={deviceForm.deviceId}
+                  onChange={(e) => setDeviceForm({ ...deviceForm, deviceId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter device ID from app"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Device Name *
+                </label>
+                <input
+                  type="text"
+                  value={deviceForm.deviceName}
+                  onChange={(e) => setDeviceForm({ ...deviceForm, deviceName: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g., Samsung Galaxy S21"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Android Version
+                </label>
+                <input
+                  type="text"
+                  value={deviceForm.androidVersion}
+                  onChange={(e) => setDeviceForm({ ...deviceForm, androidVersion: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g., Android 12"
+                />
+              </div>
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="submit"
+                  disabled={registerDeviceMutation.isPending}
+                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {registerDeviceMutation.isPending ? 'Adding...' : 'Add Device'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddDevice(false)}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
-      {/* Device Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">📱</span>
-              </div>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Total Devices</p>
-              <p className="text-2xl font-semibold text-gray-900">{devices.length}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">✓</span>
-              </div>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Online</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {devices.filter(d => d.isOnline).length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">⚡</span>
-              </div>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Busy</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {devices.filter(d => d.status === 'busy').length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">📞</span>
-              </div>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Total Calls</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {devices.reduce((sum, d) => sum + (d.callsHandled || 0), 0)}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Devices List */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="bg-white rounded-lg shadow">
         {devices.length === 0 ? (
-          <div className="text-center py-12">
+          <div className="p-8 text-center">
             <div className="text-gray-400 text-6xl mb-4">📱</div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No devices connected</h3>
             <p className="text-gray-600 mb-4">
-              Install and run the IVR Call Manager app on your Android devices to get started
+              Connect your Android device to start making IVR calls
             </p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-              <h4 className="font-medium text-blue-900 mb-2">Setup Instructions:</h4>
-              <ol className="text-sm text-blue-800 text-left space-y-1">
-                <li>1. Install the IVR Call Manager app</li>
-                <li>2. Open the app and login with your credentials</li>
-                <li>3. Grant necessary permissions (Phone, Microphone)</li>
-                <li>4. The device will appear here automatically</li>
-              </ol>
-            </div>
+            <button
+              onClick={() => setShowAddDevice(true)}
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Add First Device
+            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -193,13 +174,10 @@ const AndroidDevices = () => {
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Current Campaign
+                    Android Version
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Calls Handled
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Last Seen
+                    Registered
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -208,60 +186,38 @@ const AndroidDevices = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {devices.map((device) => (
-                  <tr key={device.id} className="hover:bg-gray-50">
+                  <tr key={device.deviceId}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{device.name}</div>
-                        <div className="text-sm text-gray-500">
-                          {device.model} • Android {device.androidVersion}
+                        <div className="text-sm font-medium text-gray-900">
+                          {device.deviceName}
                         </div>
-                        <div className="text-xs text-gray-400">
-                          ID: {device.id}
+                        <div className="text-sm text-gray-500">
+                          ID: {device.deviceId}
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(device.status, device.isOnline)}`}>
-                        {device.isOnline ? device.status : 'offline'}
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        device.status === 'active' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {device.status === 'active' ? '🟢 Online' : '🔴 Offline'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {device.currentCampaign ? (
-                        <span className="text-blue-600">Campaign #{device.currentCampaign}</span>
-                      ) : (
-                        <span className="text-gray-400">None</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {device.callsHandled || 0}
+                      {device.androidVersion || 'Unknown'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatLastSeen(device.lastSeen)}
+                      {new Date(device.registeredAt).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                      {device.isOnline && device.status !== 'busy' && (
-                        <button
-                          onClick={() => {
-                            const campaignId = prompt('Enter Campaign ID to assign:');
-                            if (campaignId) {
-                              handleAssignCampaign(device.id, parseInt(campaignId));
-                            }
-                          }}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          Assign Campaign
-                        </button>
-                      )}
-                      
-                      <button className="text-green-600 hover:text-green-900">
-                        View Logs
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button className="text-blue-600 hover:text-blue-900 mr-3">
+                        Test Connection
                       </button>
-                      
-                      <button
-                        onClick={() => handleUnregisterDevice(device.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Unregister
+                      <button className="text-red-600 hover:text-red-900">
+                        Remove
                       </button>
                     </td>
                   </tr>
@@ -272,28 +228,19 @@ const AndroidDevices = () => {
         )}
       </div>
 
-      {/* Device Instructions */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <h3 className="text-lg font-medium text-blue-900 mb-3">Device Management Tips</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-800">
-          <div>
-            <h4 className="font-medium mb-2">📱 Device Setup</h4>
-            <ul className="space-y-1">
-              <li>• Ensure stable internet connection</li>
-              <li>• Grant all required permissions</li>
-              <li>• Keep the app running in foreground</li>
-              <li>• Disable battery optimization for the app</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-medium mb-2">⚡ Performance Tips</h4>
-            <ul className="space-y-1">
-              <li>• Use devices with good call quality</li>
-              <li>• Monitor device battery levels</li>
-              <li>• Restart devices if they become unresponsive</li>
-              <li>• Update the app regularly</li>
-            </ul>
-          </div>
+      {/* App Download Section */}
+      <div className="bg-gray-50 rounded-lg p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">📲 Download IVR Call Manager App</h3>
+        <p className="text-gray-600 mb-4">
+          Install the companion Android app to enable IVR calling functionality on your device.
+        </p>
+        <div className="flex space-x-4">
+          <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+            📱 Download APK
+          </button>
+          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+            📋 Installation Guide
+          </button>
         </div>
       </div>
     </div>

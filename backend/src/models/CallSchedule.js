@@ -102,7 +102,7 @@ CallSchedule.prototype.calculateNextExecution = function() {
   }
   
   this.nextExecution = nextExec;
-  return this.save();
+  return nextExec;
 };
 
 module.exports = CallSchedule;

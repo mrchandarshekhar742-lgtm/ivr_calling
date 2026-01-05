@@ -177,7 +177,8 @@ router.post('/', auth, [
     });
 
     // Calculate next execution
-    await schedule.calculateNextExecution();
+    schedule.calculateNextExecution();
+    await schedule.save();
 
     const createdSchedule = await CallSchedule.findByPk(schedule.id, {
       include: [
@@ -262,7 +263,8 @@ router.put('/:id', auth, [
 
     // Recalculate next execution if schedule details changed
     if (updateData.scheduleType || updateData.startDate || updateData.endDate) {
-      await schedule.calculateNextExecution();
+      schedule.calculateNextExecution();
+      await schedule.save();
     }
 
     const updatedSchedule = await CallSchedule.findByPk(schedule.id, {
@@ -360,9 +362,10 @@ router.post('/:id/execute', auth, async (req, res) => {
     }
 
     // Update last executed time
+    const nextExec = schedule.calculateNextExecution();
     await schedule.update({ 
       lastExecuted: new Date(),
-      nextExecution: await schedule.calculateNextExecution()
+      nextExecution: nextExec
     });
 
     // Here you would trigger the actual campaign execution

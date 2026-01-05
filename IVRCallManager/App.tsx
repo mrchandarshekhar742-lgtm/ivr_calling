@@ -29,7 +29,7 @@ interface ConnectionStatus {
 const App = (): React.JSX.Element => {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     isConnected: false,
-    serverUrl: 'http://192.168.1.45:5000',
+    serverUrl: 'https://ivr.wxon.in',
     deviceId: '',
     deviceName: '',
     phoneNumber: '',
@@ -412,7 +412,7 @@ const App = (): React.JSX.Element => {
               style={styles.input}
               value={urlInput}
               onChangeText={setUrlInput}
-              placeholder="http://your-computer-ip:5000"
+              placeholder="https://ivr.wxon.in"
             />
             
             <Text style={styles.label}>Device Name:</Text>
@@ -505,14 +505,14 @@ const App = (): React.JSX.Element => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Setup Instructions</Text>
           <Text style={styles.instructionText}>
-            1. Make sure your computer and phone are on the same network{'\n'}
-            2. Replace "your-computer-ip" with your computer's actual IP address{'\n'}
-            3. Use HTTP URL format: http://192.168.1.100:5000{'\n'}
-            4. Login with your credentials (demo@example.com / password123){'\n'}
-            5. Enter your device name and phone number{'\n'}
-            6. Save settings and connect to server{'\n'}
-            7. Grant all permissions when prompted{'\n'}
-            8. Device will appear in the web dashboard when connected
+            1. Make sure your device has internet connection{'\n'}
+            2. Use the server URL: https://ivr.wxon.in{'\n'}
+            3. Login with your registered credentials{'\n'}
+            4. Enter your device name and phone number{'\n'}
+            5. Save settings and connect to server{'\n'}
+            6. Grant all permissions when prompted{'\n'}
+            7. Device will appear in the web dashboard when connected{'\n'}
+            8. You can now receive IVR campaign assignments
           </Text>
         </View>
       </ScrollView>
