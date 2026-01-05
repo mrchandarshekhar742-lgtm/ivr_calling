@@ -5,8 +5,6 @@ const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
 const http = require('http');
-const socketIo = require('socket.io');
-const path = require('path');
 
 // Import configurations and middleware
 const logger = require('./src/config/logger');
@@ -29,79 +27,58 @@ const callLogRoutes = require('./src/routes/callLogs');
 const app = express();
 const server = http.createServer(app);
 
-// Socket.IO setup
-const io = socketIo(server, {
-  cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
-    methods: ["GET", "POST"],
-    credentials: true
-  }
-});
-
-// Make io available to routes
-app.set('io', io);
-
-// Apply production middleware
+/* ================================
+   BASIC & SECURITY MIDDLEWARE
+================================ */
 productionMiddleware(app);
 
-// CORS configuration
-const corsOptions = {
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-  exposedHeaders: ['Content-Range', 'Accept-Ranges']
-};
-
-// Apply middleware
 app.use(helmet());
-app.use(cors(corsOptions));
-
-// Handle preflight requests
-app.options('*', cors(corsOptions));
-
 app.use(compression());
-app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate limiting
-app.use('/api/', apiLimiter);
+/* ================================
+   CORS (PRODUCTION SAFE)
+================================ */
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || 'https://ivr.wxon.in',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
 
-// Serve static files from React build in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../frontend/build')));
-}
+app.options('*', cors());
 
-// Static files with proper headers for audio
-app.use('/uploads', (req, res, next) => {
-  // Set CORS headers for audio files
-  res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'http://localhost:3000');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Range, Accept-Ranges');
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
-  
-  // Set proper headers for audio files
-  if (req.path.match(/\.(mp3|wav|ogg|aac|m4a)$/i)) {
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-  }
-  next();
-}, express.static(path.join(__dirname, 'uploads')));
+/* ================================
+   LOGGING
+================================ */
+app.use(morgan('combined', {
+  stream: { write: msg => logger.info(msg.trim()) }
+}));
 
-// Health check
+/* ================================
+   RATE LIMITING
+================================ */
+app.use('/api', apiLimiter);
+
+/* ================================
+   HEALTH CHECK
+================================ */
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
+  res.json({
+    status: 'OK',
+    service: 'IVR Backend',
     environment: process.env.NODE_ENV,
-    version: process.env.npm_package_version || '1.0.0'
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
   });
 });
 
-// API Routes
+/* ================================
+   API ROUTES (ONLY API)
+================================ */
 app.use('/api/auth', authRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/contacts', contactRoutes);
@@ -112,66 +89,50 @@ app.use('/api/templates', templateRoutes);
 app.use('/api/schedules', scheduleRoutes);
 app.use('/api/call-logs', callLogRoutes);
 
-// Serve React app in production
-if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
-  });
-}
-
-// Socket.IO connection handling
-require('./src/sockets/socketHandler')(io);
-
-// Error handling middleware (must be last)
-app.use(errorHandler);
-
-// 404 handler
-app.use('*', (req, res) => {
+/* ================================
+   404 HANDLER (JSON ONLY)
+================================ */
+app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: 'Route not found'
+    message: 'API route not found'
   });
 });
 
-const PORT = process.env.PORT || 5000;
+/* ================================
+   ERROR HANDLER (LAST)
+================================ */
+app.use(errorHandler);
 
-// Start server
+/* ================================
+   SERVER START
+================================ */
+const PORT = process.env.APP_PORT || 8090;
+
 const startServer = async () => {
   try {
-    // Connect to database
     await connectDB();
-    
-    // Start server
     server.listen(PORT, () => {
-      logger.info(`🚀 Server running on port ${PORT}`);
-      logger.info(`📱 Frontend URL: ${process.env.FRONTEND_URL}`);
+      logger.info(`🚀 IVR Backend running on port ${PORT}`);
       logger.info(`🌍 Environment: ${process.env.NODE_ENV}`);
-      
-      if (process.env.NODE_ENV === 'production') {
-        logger.info('🔒 Production security enabled');
-      }
     });
-  } catch (error) {
-    logger.error('Failed to start server:', error);
+  } catch (err) {
+    logger.error('❌ Server failed to start', err);
     process.exit(1);
   }
 };
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
-  server.close(() => {
-    logger.info('Process terminated');
-    process.exit(0);
-  });
-});
-
-process.on('SIGINT', () => {
-  logger.info('SIGINT received, shutting down gracefully');
-  server.close(() => {
-    logger.info('Process terminated');
-    process.exit(0);
-  });
-});
-
 startServer();
+
+/* ================================
+   GRACEFUL SHUTDOWN
+================================ */
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, shutting down...');
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down...');
+  process.exit(0);
+});
