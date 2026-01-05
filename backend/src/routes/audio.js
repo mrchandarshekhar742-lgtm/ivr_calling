@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const { Op } = require('sequelize');
 const { body, validationResult } = require('express-validator');
-const { AudioFile } = require('../models');
+const { AudioFile, User } = require('../models');
 const auth = require('../middleware/auth');
 const logger = require('../config/logger');
 
@@ -85,7 +85,7 @@ router.get('/', auth, async (req, res) => {
       offset: parseInt(offset),
       order: [['createdAt', 'DESC']],
       include: [{
-        model: require('../models').User,
+        model: User,
         as: 'uploader',
         attributes: ['id', 'firstName', 'lastName', 'email']
       }]
@@ -208,7 +208,7 @@ router.get('/:id', auth, async (req, res) => {
   try {
     const audioFile = await AudioFile.findByPk(req.params.id, {
       include: [{
-        model: require('../models').User,
+        model: User,
         as: 'uploader',
         attributes: ['id', 'firstName', 'lastName', 'email']
       }]

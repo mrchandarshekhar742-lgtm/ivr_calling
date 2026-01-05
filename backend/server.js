@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
 const http = require('http');
+const { Server } = require('socket.io');
 
 // Import configurations and middleware
 const logger = require('./src/config/logger');
@@ -27,6 +28,30 @@ const callLogRoutes = require('./src/routes/callLogs');
 const app = express();
 const server = http.createServer(app);
 
+// Socket.IO setup
+const io = new Server(server, {
+  cors: {
+    origin: [
+      process.env.FRONTEND_URL || 'https://ivr.wxon.in',
+      'http://ivr.wxon.in',
+      'http://localhost:3000'
+    ],
+    methods: ['GET', 'POST']
+  }
+});
+
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  logger.info(`Socket connected: ${socket.id}`);
+  
+  socket.on('disconnect', () => {
+    logger.info(`Socket disconnected: ${socket.id}`);
+  });
+});
+
+// Make io available to routes
+app.set('io', io);
+
 /* ================================
    BASIC & SECURITY MIDDLEWARE
 ================================ */
@@ -42,7 +67,11 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 ================================ */
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || 'https://ivr.wxon.in',
+    origin: [
+      process.env.FRONTEND_URL || 'https://ivr.wxon.in',
+      'http://ivr.wxon.in',
+      'http://localhost:3000'
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -107,7 +136,7 @@ app.use(errorHandler);
 /* ================================
    SERVER START
 ================================ */
-const PORT = process.env.APP_PORT || 8090;
+const PORT = process.env.PORT || 8090;
 
 const startServer = async () => {
   try {

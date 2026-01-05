@@ -237,12 +237,14 @@ router.post('/:id/start', auth, async (req, res) => {
       startedAt: new Date()
     });
 
-    // Emit socket event
+    // Emit socket event if io is available
     const io = req.app.get('io');
-    io.emit('campaign_started', {
-      campaignId: campaign.id,
-      name: campaign.name
-    });
+    if (io) {
+      io.emit('campaign_started', {
+        campaignId: campaign.id,
+        name: campaign.name
+      });
+    }
 
     logger.info(`Campaign started: ${campaign.name} by ${req.user.email}`);
 
@@ -285,12 +287,14 @@ router.post('/:id/pause', auth, async (req, res) => {
 
     await campaign.update({ status: 'paused' });
 
-    // Emit socket event
+    // Emit socket event if io is available
     const io = req.app.get('io');
-    io.emit('campaign_paused', {
-      campaignId: campaign.id,
-      name: campaign.name
-    });
+    if (io) {
+      io.emit('campaign_paused', {
+        campaignId: campaign.id,
+        name: campaign.name
+      });
+    }
 
     logger.info(`Campaign paused: ${campaign.name} by ${req.user.email}`);
 
@@ -336,12 +340,14 @@ router.post('/:id/stop', auth, async (req, res) => {
       completedAt: new Date()
     });
 
-    // Emit socket event
+    // Emit socket event if io is available
     const io = req.app.get('io');
-    io.emit('campaign_stopped', {
-      campaignId: campaign.id,
-      name: campaign.name
-    });
+    if (io) {
+      io.emit('campaign_stopped', {
+        campaignId: campaign.id,
+        name: campaign.name
+      });
+    }
 
     logger.info(`Campaign stopped: ${campaign.name} by ${req.user.email}`);
 
