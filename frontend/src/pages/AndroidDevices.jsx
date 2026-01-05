@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { api } from '../utils/api';
+import api from '../utils/api';
 import { toast } from 'react-hot-toast';
 
 const AndroidDevices = () => {
