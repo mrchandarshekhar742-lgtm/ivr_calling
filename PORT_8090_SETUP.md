@@ -32,7 +32,7 @@ grep PORT .env
 # Should show: PORT=8090
 ```
 
-#### **2. Update Nginx Configuration**
+#### **2. Update Nginx Configuration** 
 ```bash
 # Copy new nginx config
 sudo cp nginx-ivr-8090.conf /etc/nginx/sites-available/ivr.wxon.in
