@@ -14,6 +14,9 @@ const { apiLimiter } = require('./src/middleware/rateLimiter');
 const errorHandler = require('./src/middleware/errorHandler');
 const productionMiddleware = require('./src/middleware/production');
 
+// Import models to ensure associations are loaded
+require('./src/models');
+
 // Import routes
 const authRoutes = require('./src/routes/auth');
 const campaignRoutes = require('./src/routes/campaigns');

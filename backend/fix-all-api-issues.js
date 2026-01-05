@@ -2,14 +2,16 @@ require('dotenv').config();
 const { sequelize } = require('./src/config/database');
 const logger = require('./src/config/logger');
 
-// Import all models to ensure they're registered
-const User = require('./src/models/User');
-const Campaign = require('./src/models/Campaign');
-const Contact = require('./src/models/Contact');
-const AudioFile = require('./src/models/AudioFile');
-const CallLog = require('./src/models/CallLog');
-const CallTemplate = require('./src/models/CallTemplate');
-const CallSchedule = require('./src/models/CallSchedule');
+// Import models with associations
+const {
+  User,
+  Campaign,
+  Contact,
+  AudioFile,
+  CallLog,
+  CallTemplate,
+  CallSchedule
+} = require('./src/models');
 
 const fixAllApiIssues = async () => {
   try {
