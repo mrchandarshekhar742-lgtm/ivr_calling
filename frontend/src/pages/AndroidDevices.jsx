@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { api } from '../utils/api';
 import { toast } from 'react-hot-toast';
 
@@ -14,25 +14,27 @@ const AndroidDevices = () => {
   const queryClient = useQueryClient();
 
   // Fetch devices
-  const { data: devicesData, isLoading, error } = useQuery({
-    queryKey: ['devices'],
-    queryFn: () => api.get('/devices'),
-    retry: 1
-  });
+  const { data: devicesData, isLoading, error } = useQuery(
+    'devices',
+    () => api.get('/devices'),
+    { retry: 1 }
+  );
 
   // Register device mutation
-  const registerDeviceMutation = useMutation({
-    mutationFn: (deviceData) => api.post('/devices/register', deviceData),
-    onSuccess: () => {
-      toast.success('Device registered successfully!');
-      queryClient.invalidateQueries(['devices']);
-      setShowAddDevice(false);
-      setDeviceForm({ deviceId: '', deviceName: '', androidVersion: '' });
-    },
-    onError: (error) => {
-      toast.error(error.response?.data?.message || 'Failed to register device');
+  const registerDeviceMutation = useMutation(
+    (deviceData) => api.post('/devices/register', deviceData),
+    {
+      onSuccess: () => {
+        toast.success('Device registered successfully!');
+        queryClient.invalidateQueries('devices');
+        setShowAddDevice(false);
+        setDeviceForm({ deviceId: '', deviceName: '', androidVersion: '' });
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.message || 'Failed to register device');
+      }
     }
-  });
+  );
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -128,10 +130,10 @@ const AndroidDevices = () => {
               <div className="flex space-x-3 pt-4">
                 <button
                   type="submit"
-                  disabled={registerDeviceMutation.isPending}
+                  disabled={registerDeviceMutation.isLoading}
                   className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
-                  {registerDeviceMutation.isPending ? 'Adding...' : 'Add Device'}
+                  {registerDeviceMutation.isLoading ? 'Adding...' : 'Add Device'}
                 </button>
                 <button
                   type="button"
