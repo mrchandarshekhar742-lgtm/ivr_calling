@@ -16,13 +16,13 @@ const AndroidDevices = () => {
   // Fetch devices
   const { data: devicesData, isLoading, error } = useQuery(
     'devices',
-    () => api.get('/devices'),
+    () => api.get('/api/devices'),
     { retry: 1 }
   );
 
   // Register device mutation
   const registerDeviceMutation = useMutation(
-    (deviceData) => api.post('/devices/register', deviceData),
+    (deviceData) => api.post('/api/devices/register', deviceData),
     {
       onSuccess: () => {
         toast.success('Device registered successfully!');
