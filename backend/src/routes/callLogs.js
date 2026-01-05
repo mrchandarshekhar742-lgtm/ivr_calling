@@ -1,7 +1,7 @@
 const express = require('express');
 const { Op } = require('sequelize');
 const { query, validationResult } = require('express-validator');
-const { CallLog, Campaign, Contact, User } = require('../models');
+const { CallLog, Campaign, Contact } = require('../models');
 const { sequelize } = require('../config/database');
 const auth = require('../middleware/auth');
 const logger = require('../config/logger');
@@ -80,13 +80,13 @@ router.get('/', auth, [
     if (campaignId) whereClause.campaignId = campaignId;
     
     if (startDate || endDate) {
-      whereClause.calledAt = {};
-      if (startDate) whereClause.calledAt[Op.gte] = new Date(startDate);
-      if (endDate) whereClause.calledAt[Op.lte] = new Date(endDate);
+      whereClause.startTime = {};
+      if (startDate) whereClause.startTime[Op.gte] = new Date(startDate);
+      if (endDate) whereClause.startTime[Op.lte] = new Date(endDate);
     }
 
     if (search) {
-      whereClause.phoneNumber = { [Op.iLike]: `%${search}%` };
+      whereClause.deviceId = { [Op.like]: `%${search}%` };
     }
 
     const callLogs = await CallLog.findAndCountAll({
@@ -95,17 +95,19 @@ router.get('/', auth, [
         {
           model: Campaign,
           as: 'campaign',
-          attributes: ['id', 'name', 'type', 'status']
+          attributes: ['id', 'name', 'type', 'status'],
+          required: false
         },
         {
           model: Contact,
           as: 'contact',
-          attributes: ['id', 'name', 'email']
+          attributes: ['id', 'name'],
+          required: false
         }
       ],
       limit: parseInt(limit),
       offset,
-      order: [['calledAt', 'DESC']]
+      order: [['startTime', 'DESC']]
     });
 
     res.json({

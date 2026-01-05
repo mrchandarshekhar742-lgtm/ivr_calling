@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import api from '../utils/api';
 import { toast } from 'react-hot-toast';
-import { testApiBaseUrl, testDevicesEndpoint } from '../utils/testApi';
 
 const AndroidDevices = () => {
   const [showAddDevice, setShowAddDevice] = useState(false);
@@ -13,12 +12,6 @@ const AndroidDevices = () => {
   });
 
   const queryClient = useQueryClient();
-
-  // Debug: Test API configuration
-  useEffect(() => {
-    console.log('=== API DEBUG INFO ===');
-    testApiBaseUrl();
-  }, []);
 
   // Fetch devices
   const { data: devicesData, isLoading, error } = useQuery(
@@ -72,15 +65,9 @@ const AndroidDevices = () => {
         </div>
         <button
           onClick={() => setShowAddDevice(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors mr-3"
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
         >
           Add Device
-        </button>
-        <button
-          onClick={() => testDevicesEndpoint()}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-        >
-          Test API
         </button>
       </div>
 
