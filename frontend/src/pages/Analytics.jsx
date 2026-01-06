@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import api from '../utils/api.js';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 
 const Analytics = () => {
-  const [analytics, setAnalytics] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [timeRange, setTimeRange] = useState('7d');
 
   const getStartDate = useCallback(() => {
@@ -22,36 +20,35 @@ const Analytics = () => {
     }
   }, [timeRange]);
 
-  const fetchAnalytics = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [dashboardResponse, campaignResponse, callResponse] = await Promise.all([
-        api.get('/api/analytics/dashboard'),
-        api.get('/api/analytics/campaigns'),
-        api.get('/api/analytics/calls', {
-          params: {
-            groupBy: timeRange === '24h' ? 'hour' : 'day',
-            startDate: getStartDate()
-          }
-        })
-      ]);
+  // Fetch analytics data using React Query
+  const { data: analytics, isLoading: loading, error, refetch: fetchAnalytics } = useQuery({
+    queryKey: ['analytics', timeRange],
+    queryFn: async () => {
+      try {
+        const [dashboardResponse, campaignResponse, callResponse] = await Promise.all([
+          api.get('/api/analytics/dashboard'),
+          api.get('/api/analytics/campaigns'),
+          api.get('/api/analytics/calls', {
+            params: {
+              groupBy: timeRange === '24h' ? 'hour' : 'day',
+              startDate: getStartDate()
+            }
+          })
+        ]);
 
-      setAnalytics({
-        dashboard: dashboardResponse.data.data || {},
-        campaigns: campaignResponse.data.data || [],
-        calls: callResponse.data.data || {}
-      });
-    } catch (err) {
-      setError('Failed to fetch analytics');
-      console.error('Fetch analytics error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [timeRange, getStartDate]);
-
-  useEffect(() => {
-    fetchAnalytics();
-  }, [fetchAnalytics]);
+        return {
+          dashboard: dashboardResponse.data.data || {},
+          campaigns: campaignResponse.data.data || [],
+          calls: callResponse.data.data || {}
+        };
+      } catch (err) {
+        console.error('Fetch analytics error:', err);
+        throw new Error('Failed to fetch analytics');
+      }
+    },
+    retry: 1,
+    refetchInterval: 30000 // Refresh every 30 seconds
+  });
 
 
 
@@ -73,9 +70,9 @@ const Analytics = () => {
       <div className="text-center py-12">
         <div className="text-red-500 text-xl mb-4">⚠️</div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to load analytics</h3>
-        <p className="text-gray-600 mb-4">{error}</p>
+        <p className="text-gray-600 mb-4">{error.message || 'Unknown error'}</p>
         <button
-          onClick={fetchAnalytics}
+          onClick={() => fetchAnalytics()}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
         >
           Retry
