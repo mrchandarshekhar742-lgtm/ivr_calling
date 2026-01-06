@@ -29,7 +29,7 @@ const Dashboard = () => {
     }
   );
 
-  const stats = dashboardData?.data?.data || {};
+  const stats = dashboardData?.data?.data?.overview || {};
 
   const statCards = [
     {
@@ -66,19 +66,28 @@ const Dashboard = () => {
     },
   ];
 
-  const recentCampaigns = stats.recentCampaigns || [];
-  const recentCalls = stats.recentCalls || [];
+  const recentCampaigns = dashboardData?.data?.data?.recentCampaigns || [];
+  const recentCalls = dashboardData?.data?.data?.recentCalls || [];
 
   if (isLoading) {
     return <LoadingSpinner text="Loading dashboard..." />;
   }
 
   if (error) {
+    console.error('Dashboard error:', error);
     return (
       <div className="text-center py-12">
         <XCircleIcon className="mx-auto h-12 w-12 text-red-400" />
         <h3 className="mt-2 text-sm font-medium text-gray-900">Error loading dashboard</h3>
-        <p className="mt-1 text-sm text-gray-500">Please try refreshing the page.</p>
+        <p className="mt-1 text-sm text-gray-500">
+          {error?.response?.data?.message || error?.message || 'Please try refreshing the page.'}
+        </p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="mt-3 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+        >
+          Refresh Page
+        </button>
       </div>
     );
   }
