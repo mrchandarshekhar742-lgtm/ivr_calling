@@ -21,9 +21,9 @@ const Dashboard = () => {
   });
 
   // Fetch dashboard data
-  const { data: dashboardData, isLoading, error } = useQuery(
-    'dashboard',
-    async () => {
+  const { data: dashboardData, isLoading, error } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: async () => {
       console.log('Fetching dashboard data...');
       try {
         const response = await api.get('/api/analytics/dashboard');
@@ -34,14 +34,12 @@ const Dashboard = () => {
         throw err;
       }
     },
-    {
-      refetchInterval: 30000, // Refresh every 30 seconds
-      retry: 1,
-      onError: (error) => {
-        console.error('Dashboard query error:', error);
-      }
+    refetchInterval: 30000, // Refresh every 30 seconds
+    retry: 1,
+    onError: (error) => {
+      console.error('Dashboard query error:', error);
     }
-  );
+  });
 
   const stats = dashboardData?.data?.data?.overview || {};
 
