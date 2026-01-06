@@ -23,9 +23,23 @@ const Dashboard = () => {
   // Fetch dashboard data
   const { data: dashboardData, isLoading, error } = useQuery(
     'dashboard',
-    () => api.get('/api/analytics/dashboard'),
+    async () => {
+      console.log('Fetching dashboard data...');
+      try {
+        const response = await api.get('/api/analytics/dashboard');
+        console.log('Dashboard response:', response);
+        return response;
+      } catch (err) {
+        console.error('Dashboard fetch error:', err);
+        throw err;
+      }
+    },
     {
       refetchInterval: 30000, // Refresh every 30 seconds
+      retry: 1,
+      onError: (error) => {
+        console.error('Dashboard query error:', error);
+      }
     }
   );
 
@@ -75,19 +89,41 @@ const Dashboard = () => {
 
   if (error) {
     console.error('Dashboard error:', error);
+    
+    // Show detailed error information
+    const errorMessage = error?.response?.data?.message || error?.message || 'Unknown error';
+    const errorStatus = error?.response?.status || 'No status';
+    
     return (
       <div className="text-center py-12">
         <XCircleIcon className="mx-auto h-12 w-12 text-red-400" />
         <h3 className="mt-2 text-sm font-medium text-gray-900">Error loading dashboard</h3>
-        <p className="mt-1 text-sm text-gray-500">
-          {error?.response?.data?.message || error?.message || 'Please try refreshing the page.'}
-        </p>
-        <button 
-          onClick={() => window.location.reload()} 
-          className="mt-3 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-        >
-          Refresh Page
-        </button>
+        <div className="mt-2 text-sm text-gray-600 space-y-1">
+          <p><strong>Status:</strong> {errorStatus}</p>
+          <p><strong>Message:</strong> {errorMessage}</p>
+          <p><strong>URL:</strong> /api/analytics/dashboard</p>
+        </div>
+        <div className="mt-4 space-x-2">
+          <button 
+            onClick={() => window.location.reload()} 
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            Refresh Page
+          </button>
+          <button 
+            onClick={async () => {
+              try {
+                const testResponse = await api.get('/api/analytics/test');
+                alert('Test API works: ' + JSON.stringify(testResponse.data));
+              } catch (testError) {
+                alert('Test API failed: ' + testError.message);
+              }
+            }}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+          >
+            Test API
+          </button>
+        </div>
       </div>
     );
   }
