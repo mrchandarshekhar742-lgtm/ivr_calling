@@ -192,14 +192,6 @@ router.get('/dashboard', auth, async (req, res) => {
     });
   }
 });
-  } catch (error) {
-    logger.error('Dashboard analytics error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
 
 // @route   GET /api/analytics/campaigns
 // @desc    Get campaign analytics
