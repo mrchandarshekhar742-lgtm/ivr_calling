@@ -147,49 +147,43 @@ const Contacts = () => {
     }
   };
 
-  const handleBulkTextImport = async () => {
-    if (!bulkNumbers.trim()) {
-      setError('Please enter phone numbers');
+  const handleBulkTextImport = async (contactsData = null) => {
+    const contactsToImport = contactsData || bulkNumbers
+      .split(/[,\n\s]+/)
+      .map(num => num.trim())
+      .filter(num => num.length > 0)
+      .map(num => num.replace(/[^\d+]/g, ''))
+      .map((phone, index) => ({
+        name: `Contact ${index + 1}`,
+        phone: phone,
+        email: '',
+        notes: contactsData ? 'Imported from CSV' : 'Added via bulk text import'
+      }));
+
+    if (contactsToImport.length === 0) {
+      setError('No valid phone numbers found');
       return;
     }
 
     try {
       setLoading(true);
       
-      // Parse numbers from text (comma, newline, or space separated)
-      const numbers = bulkNumbers
-        .split(/[,\n\s]+/)
-        .map(num => num.trim())
-        .filter(num => num.length > 0)
-        .map(num => num.replace(/[^\d+]/g, '')); // Keep only digits and +
-
-      if (numbers.length === 0) {
-        setError('No valid phone numbers found');
-        return;
-      }
-
-      // Create contacts from numbers
-      const contacts = numbers.map((phone, index) => ({
-        name: `Contact ${index + 1}`,
-        phone: phone,
-        email: '',
-        notes: 'Added via bulk text import'
-      }));
-
-      // Send to backend
-      const response = await api.post('/api/contacts/bulk-text', { contacts });
+      const response = await api.post('/api/contacts/bulk-text', { 
+        contacts: contactsToImport 
+      });
       
       setShowBulkText(false);
+      setShowBulkImport(false);
       setBulkNumbers('');
       fetchContacts();
       setError('');
       
-      const added = response.data.data?.added || contacts.length;
+      const added = response.data.data?.added || contactsToImport.length;
       alert(`Successfully added ${added} contacts!`);
       
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to import contacts');
-      console.error('Bulk text import error:', err);
+      console.error('Bulk import error:', err);
     } finally {
       setLoading(false);
     }
