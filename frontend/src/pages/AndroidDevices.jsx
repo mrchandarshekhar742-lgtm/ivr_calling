@@ -105,6 +105,11 @@ const AndroidDevices = () => {
   };
 
   const devices = devicesData?.data?.devices || [];
+  
+  // Filter to show only online devices
+  const onlineDevices = devices.filter(device => 
+    device.status === 'online' || device.status === 'active'
+  );
 
   if (isLoading) {
     return (
@@ -134,8 +139,10 @@ const AndroidDevices = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Android Devices</h1>
-          <p className="text-gray-600">Manage your connected Android devices for IVR calling</p>
+          <h1 className="text-2xl font-bold text-gray-900">Online Android Devices</h1>
+          <p className="text-gray-600">
+            Connected devices ready for IVR calling ({onlineDevices.length} online)
+          </p>
         </div>
         <div className="flex space-x-2">
           <button
@@ -153,16 +160,37 @@ const AndroidDevices = () => {
         </div>
       </div>
 
-      {/* Connection Instructions */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-900 mb-2">📱 How to Connect Your Android Device:</h3>
-        <ol className="list-decimal list-inside space-y-1 text-blue-800 text-sm">
-          <li>Install the IVR Call Manager app on your Android device</li>
-          <li>Open the app and go to Settings</li>
-          <li>Enter Server URL: <code className="bg-blue-100 px-1 rounded">https://ivr.wxon.in</code></li>
-          <li>Register the device here to get your device token</li>
-          <li>Enter the token in the app to connect</li>
-        </ol>
+      {/* Device Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="text-green-600 text-2xl mr-3">🟢</div>
+            <div>
+              <p className="text-sm font-medium text-green-900">Online Devices</p>
+              <p className="text-2xl font-bold text-green-700">{onlineDevices.length}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="text-gray-600 text-2xl mr-3">📱</div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">Total Devices</p>
+              <p className="text-2xl font-bold text-gray-700">{devices.length}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="text-blue-600 text-2xl mr-3">📞</div>
+            <div>
+              <p className="text-sm font-medium text-blue-900">Ready for Calls</p>
+              <p className="text-2xl font-bold text-blue-700">{onlineDevices.length}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Add Device Modal */}
@@ -268,17 +296,6 @@ const AndroidDevices = () => {
                 </div>
               </div>
               
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <h4 className="font-semibold text-green-900 mb-2">📋 Next Steps:</h4>
-                <ol className="list-decimal list-inside space-y-1 text-green-800 text-sm">
-                  <li>Copy the token above</li>
-                  <li>Open IVR Call Manager app on your Android device</li>
-                  <li>Go to Settings → Server Configuration</li>
-                  <li>Paste the token in the "Device Token" field</li>
-                  <li>Click "Connect to Server"</li>
-                </ol>
-              </div>
-
               <div className="bg-gray-50 rounded-lg p-3">
                 <h4 className="font-medium text-gray-900 mb-2">Device Information:</h4>
                 <div className="text-sm text-gray-600 space-y-1">
@@ -301,20 +318,23 @@ const AndroidDevices = () => {
         </div>
       )}
 
-      {/* Devices List */}
+      {/* Online Devices List */}
       <div className="bg-white rounded-lg shadow">
-        {devices.length === 0 ? (
+        {onlineDevices.length === 0 ? (
           <div className="p-8 text-center">
             <div className="text-gray-400 text-6xl mb-4">📱</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No devices connected</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No devices online</h3>
             <p className="text-gray-600 mb-4">
-              Connect your Android device to start making IVR calls
+              {devices.length === 0 
+                ? "Connect your Android device to start making IVR calls"
+                : `You have ${devices.length} device(s) registered, but none are currently online`
+              }
             </p>
             <button
               onClick={() => setShowAddDevice(true)}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Add First Device
+              {devices.length === 0 ? 'Add First Device' : 'Add Another Device'}
             </button>
           </div>
         ) : (
@@ -329,9 +349,6 @@ const AndroidDevices = () => {
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Token
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Last Seen
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -340,8 +357,8 @@ const AndroidDevices = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {devices.map((device) => (
-                  <tr key={device.deviceId}>
+                {onlineDevices.map((device) => (
+                  <tr key={device.deviceId} className="hover:bg-green-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
@@ -356,38 +373,12 @@ const AndroidDevices = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        device.status === 'online'
-                          ? 'bg-green-100 text-green-800' 
-                          : device.status === 'busy'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {device.status === 'online' ? '🟢 Online' : 
-                         device.status === 'busy' ? '🟡 Busy' : 
-                         device.status === 'active' ? '🟢 Online' : '🔴 Offline'}
+                      <span className="inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">
+                        🟢 Online & Ready
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
-                        <code className="text-xs bg-gray-100 px-2 py-1 rounded">
-                          {device.tokenPreview || 'No token'}
-                        </code>
-                        {device.tokenPreview && (
-                          <button
-                            onClick={() => {
-                              setSelectedDevice(device);
-                              setShowTokenModal(true);
-                            }}
-                            className="text-blue-600 hover:text-blue-900 text-xs"
-                          >
-                            View Full
-                          </button>
-                        )}
-                      </div>
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {device.lastSeen ? new Date(device.lastSeen).toLocaleString() : 'Never'}
+                      {device.lastSeen ? new Date(device.lastSeen).toLocaleString() : 'Just now'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button 
@@ -395,7 +386,7 @@ const AndroidDevices = () => {
                         disabled={testDeviceMutation.isLoading}
                         className="text-green-600 hover:text-green-900 mr-3 disabled:opacity-50"
                       >
-                        Test
+                        Test Connection
                       </button>
                       <button 
                         onClick={() => handleRemoveDevice(device.deviceId, device.deviceName)}
@@ -411,22 +402,6 @@ const AndroidDevices = () => {
             </table>
           </div>
         )}
-      </div>
-
-      {/* App Download Section */}
-      <div className="bg-gray-50 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">📲 Download IVR Call Manager App</h3>
-        <p className="text-gray-600 mb-4">
-          Install the companion Android app to enable IVR calling functionality on your device.
-        </p>
-        <div className="flex space-x-4">
-          <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
-            📱 Download APK
-          </button>
-          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-            📋 Installation Guide
-          </button>
-        </div>
       </div>
     </div>
   );
