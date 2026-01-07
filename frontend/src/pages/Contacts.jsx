@@ -8,6 +8,8 @@ const Contacts = () => {
   const [error, setError] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showBulkText, setShowBulkText] = useState(false);
+  const [bulkNumbers, setBulkNumbers] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -65,25 +67,49 @@ const Contacts = () => {
     }
   };
 
-  const handleBulkImport = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append('file', file);
+  const handleBulkTextImport = async () => {
+    if (!bulkNumbers.trim()) {
+      setError('Please enter phone numbers');
+      return;
+    }
 
     try {
       setLoading(true);
-      await api.post('/api/contacts/bulk', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      setShowBulkImport(false);
+      
+      // Parse numbers from text (comma, newline, or space separated)
+      const numbers = bulkNumbers
+        .split(/[,\n\s]+/)
+        .map(num => num.trim())
+        .filter(num => num.length > 0)
+        .map(num => num.replace(/[^\d+]/g, '')); // Keep only digits and +
+
+      if (numbers.length === 0) {
+        setError('No valid phone numbers found');
+        return;
+      }
+
+      // Create contacts from numbers
+      const contacts = numbers.map((phone, index) => ({
+        name: `Contact ${index + 1}`,
+        phone: phone,
+        email: '',
+        notes: 'Added via bulk text import'
+      }));
+
+      // Send to backend
+      const response = await api.post('/api/contacts/bulk-text', { contacts });
+      
+      setShowBulkText(false);
+      setBulkNumbers('');
       fetchContacts();
+      setError('');
+      
+      const added = response.data.data?.added || contacts.length;
+      alert(`Successfully added ${added} contacts!`);
+      
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to import contacts');
-      console.error('Bulk import error:', err);
+      console.error('Bulk text import error:', err);
     } finally {
       setLoading(false);
     }
@@ -105,6 +131,12 @@ const Contacts = () => {
             className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
           >
             Bulk Import
+          </button>
+          <button
+            onClick={() => setShowBulkText(true)}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+          >
+            Bulk Numbers
           </button>
           <button
             onClick={() => setShowAddForm(true)}
@@ -220,6 +252,46 @@ const Contacts = () => {
               <button
                 onClick={() => setShowBulkImport(false)}
                 className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Text Numbers */}
+      {showBulkText && (
+        <div className="bg-white shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Add Bulk Phone Numbers</h3>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Enter phone numbers separated by commas, spaces, or new lines:
+            </p>
+            <textarea
+              value={bulkNumbers}
+              onChange={(e) => setBulkNumbers(e.target.value)}
+              placeholder="9876543210, 9876543211&#10;9876543212&#10;+91 9876543213"
+              rows={8}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <div className="text-sm text-gray-500">
+              Example formats: 9876543210, +91 9876543210, (987) 654-3210
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={handleBulkTextImport}
+                disabled={loading || !bulkNumbers.trim()}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {loading ? 'Adding...' : 'Add Numbers'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowBulkText(false);
+                  setBulkNumbers('');
+                }}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
               >
                 Cancel
               </button>

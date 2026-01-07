@@ -198,6 +198,73 @@ router.post('/bulk', auth, [
   }
 });
 
+// @route   POST /api/contacts/bulk-text
+// @desc    Bulk import contacts from text numbers
+// @access  Private
+router.post('/bulk-text', auth, [
+  body('contacts').isArray().withMessage('Contacts must be an array')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid input',
+        errors: errors.array()
+      });
+    }
+
+    const { contacts } = req.body;
+    const createdContacts = [];
+    const duplicates = [];
+
+    for (const contactData of contacts) {
+      try {
+        // Check if contact already exists
+        const existingContact = await Contact.findOne({
+          where: {
+            phone: contactData.phone,
+            createdBy: req.user.id
+          }
+        });
+
+        if (existingContact) {
+          duplicates.push(contactData.phone);
+          continue;
+        }
+
+        // Create new contact
+        const contact = await Contact.create({
+          ...contactData,
+          createdBy: req.user.id
+        });
+
+        createdContacts.push(contact);
+      } catch (error) {
+        logger.error(`Error creating contact ${contactData.phone}:`, error);
+      }
+    }
+
+    logger.info(`Bulk text import: ${createdContacts.length} contacts created by ${req.user.email}`);
+
+    res.json({
+      success: true,
+      message: `Successfully imported ${createdContacts.length} contacts`,
+      data: {
+        added: createdContacts.length,
+        duplicates: duplicates.length,
+        total: contacts.length
+      }
+    });
+  } catch (error) {
+    logger.error('Bulk text import error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
 // @route   GET /api/contacts/:id
 // @desc    Get single contact
 // @access  Private

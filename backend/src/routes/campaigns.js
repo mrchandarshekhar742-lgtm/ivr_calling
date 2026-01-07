@@ -63,7 +63,7 @@ router.get('/', auth, async (req, res) => {
 router.post('/', auth, [
   body('name').trim().isLength({ min: 3, max: 100 }),
   body('description').optional().trim(),
-  body('type').isIn(['bulk', 'scheduled', 'triggered']),
+  body('type').isIn(['broadcast', 'survey', 'notification', 'reminder', 'bulk', 'scheduled', 'triggered']),
   body('audioFileId').optional().isInt()
 ], async (req, res) => {
   try {
@@ -159,7 +159,7 @@ router.get('/:id', auth, async (req, res) => {
 router.put('/:id', auth, [
   body('name').optional().trim().isLength({ min: 3, max: 100 }),
   body('description').optional().trim(),
-  body('type').optional().isIn(['bulk', 'scheduled', 'triggered']),
+  body('type').optional().isIn(['broadcast', 'survey', 'notification', 'reminder', 'bulk', 'scheduled', 'triggered']),
   body('audioFileId').optional().isInt()
 ], async (req, res) => {
   try {

@@ -28,9 +28,18 @@ const CreateCampaign = () => {
   const fetchAudioFiles = async () => {
     try {
       const response = await api.get('/api/audio');
-      setAudioFiles(response.data.audioFiles || []);
+      console.log('Audio files response:', response.data);
+      
+      // Handle different response structures
+      const audioFiles = response.data.data?.audioFiles || response.data.audioFiles || response.data || [];
+      setAudioFiles(audioFiles);
+      
+      if (audioFiles.length === 0) {
+        console.warn('No audio files found. Please upload some audio files first.');
+      }
     } catch (err) {
       console.error('Fetch audio files error:', err);
+      setAudioFiles([]);
     }
   };
 

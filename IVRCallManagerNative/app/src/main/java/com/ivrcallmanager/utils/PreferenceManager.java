@@ -71,6 +71,30 @@ public class PreferenceManager {
         preferences.edit().putString(KEY_SERVER_URL, serverUrl).apply();
     }
     
+    public void saveDeviceData(String deviceId, String deviceName) {
+        SharedPreferences.Editor editor = preferences.edit();
+        editor.putString(KEY_DEVICE_ID, deviceId);
+        editor.putString(KEY_DEVICE_NAME, deviceName);
+        editor.apply();
+    }
+    
+    // Static methods for backward compatibility
+    public static void saveLoginData(Context context, String email, String token) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putString(KEY_AUTH_TOKEN, token);
+        editor.putString(KEY_USER_EMAIL, email);
+        editor.apply();
+    }
+    
+    public static void saveDeviceData(Context context, String deviceId, String deviceName) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putString(KEY_DEVICE_ID, deviceId);
+        editor.putString(KEY_DEVICE_NAME, deviceName);
+        editor.apply();
+    }
+    
     public String getAuthToken() {
         return preferences.getString(KEY_AUTH_TOKEN, null);
     }

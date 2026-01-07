@@ -357,14 +357,15 @@ const AndroidDevices = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        device.status === 'active' || device.status === 'online'
+                        device.status === 'online'
                           ? 'bg-green-100 text-green-800' 
                           : device.status === 'busy'
                           ? 'bg-yellow-100 text-yellow-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {device.status === 'active' || device.status === 'online' ? '🟢 Online' : 
-                         device.status === 'busy' ? '🟡 Busy' : '🔴 Offline'}
+                        {device.status === 'online' ? '🟢 Online' : 
+                         device.status === 'busy' ? '🟡 Busy' : 
+                         device.status === 'active' ? '🟢 Online' : '🔴 Offline'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
