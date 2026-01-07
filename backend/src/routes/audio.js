@@ -21,7 +21,9 @@ const fileFilter = (req, file, cb) => {
     'audio/x-wav',
     'audio/mp4',
     'audio/aac',
-    'audio/ogg'
+    'audio/ogg',
+    'audio/webm',
+    'audio/flac'
   ];
   
   if (allowedMimes.includes(file.mimetype)) {
