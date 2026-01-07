@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#f8f9fa">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#007bff"
+        android:padding="20dp"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Settings"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Configure your device settings"
+            android:textSize="16sp"
+            android:textColor="#e3f2fd"
+            android:gravity="center"
+            android:layout_marginTop="5dp" />
+
+    </LinearLayout>
+
+    <!-- Settings Form -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@android:color/white"
+        android:padding="20dp"
+        android:elevation="2dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Server URL:"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#555"
+            android:layout_marginBottom="5dp"
+            android:layout_marginTop="10dp" />
+
+        <EditText
+            android:id="@+id/serverUrlEdit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="https://ivr.wxon.in"
+            android:inputType="textUri"
+            android:padding="12dp"
+            android:background="#f8f9fa"
+            android:layout_marginBottom="10dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Device Name:"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#555"
+            android:layout_marginBottom="5dp"
+            android:layout_marginTop="10dp" />
+
+        <EditText
+            android:id="@+id/deviceNameEdit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="My Android Device"
+            android:inputType="text"
+            android:padding="12dp"
+            android:background="#f8f9fa"
+            android:layout_marginBottom="10dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Phone Number:"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#555"
+            android:layout_marginBottom="5dp"
+            android:layout_marginTop="10dp" />
+
+        <EditText
+            android:id="@+id/phoneNumberEdit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="+91-9876543210"
+            android:inputType="phone"
+            android:padding="12dp"
+            android:background="#f8f9fa"
+            android:layout_marginBottom="20dp" />
+
+        <Button
+            android:id="@+id/saveButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Save Settings"
+            android:textColor="@android:color/white"
+            android:background="#ffc107"
+            android:padding="15dp"
+            android:layout_marginBottom="10dp" />
+
+        <Button
+            android:id="@+id/testConnectionButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Test Connection"
+            android:textColor="@android:color/white"
+            android:background="#28a745"
+            android:padding="15dp" />
+
+    </LinearLayout>
+
+</LinearLayout>

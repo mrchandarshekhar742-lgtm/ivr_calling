@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">IVR Call Manager</string>
+    <string name="login_title">Login</string>
+    <string name="settings_title">Settings</string>
+    <string name="email_hint">Email</string>
+    <string name="password_hint">Password</string>
+    <string name="server_url_hint">Server URL</string>
+    <string name="device_name_hint">Device Name</string>
+    <string name="phone_number_hint">Phone Number</string>
+    <string name="login_button">Login</string>
+    <string name="logout_button">Logout</string>
+    <string name="connect_button">Connect to Server</string>
+    <string name="disconnect_button">Disconnect</string>
+    <string name="settings_button">Settings</string>
+    <string name="save_button">Save Settings</string>
+    <string name="test_connection_button">Test Connection</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_disconnected">Disconnected</string>
+    <string name="status_not_logged_in">Not logged in</string>
+</resources>
