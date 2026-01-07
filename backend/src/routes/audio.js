@@ -67,6 +67,7 @@ router.get('/', auth, async (req, res) => {
       limit: parseInt(limit),
       offset: parseInt(offset),
       order: [['createdAt', 'DESC']],
+      attributes: { exclude: ['data'] }, // Exclude BLOB data from list view
       include: [{
         model: User,
         as: 'uploader',
@@ -90,7 +91,8 @@ router.get('/', auth, async (req, res) => {
     logger.error('Get audio files error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -159,7 +161,8 @@ router.post('/', auth, upload.single('audio'), [
     logger.error('Upload audio error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
