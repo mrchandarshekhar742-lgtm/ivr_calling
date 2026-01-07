@@ -54,6 +54,11 @@ public class PreferenceManager {
         editor.apply();
     }
     
+    public void generateNewDeviceId() {
+        String deviceId = "device_" + UUID.randomUUID().toString().substring(0, 8);
+        preferences.edit().putString(KEY_DEVICE_ID, deviceId).apply();
+    }
+    
     public void saveSettings(String serverUrl, String deviceName, String phoneNumber) {
         SharedPreferences.Editor editor = preferences.edit();
         editor.putString(KEY_SERVER_URL, serverUrl);

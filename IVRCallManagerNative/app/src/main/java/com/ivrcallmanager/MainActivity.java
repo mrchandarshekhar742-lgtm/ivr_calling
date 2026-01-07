@@ -154,6 +154,9 @@ public class MainActivity extends AppCompatActivity {
             isLoggedIn = false;
             isConnected = false;
             
+            // Generate new device ID for next user
+            prefManager.generateNewDeviceId();
+            
             updateUI();
             Toast.makeText(this, "Logged out successfully", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {

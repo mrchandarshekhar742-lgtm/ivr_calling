@@ -99,10 +99,8 @@ router.post('/register', auth, [
     if (devices.has(deviceId)) {
       const existingDevice = devices.get(deviceId);
       if (existingDevice.userId !== req.user.id) {
-        return res.status(400).json({
-          success: false,
-          message: 'Device ID already registered by another user'
-        });
+        // Allow re-registration by different user - remove old registration
+        logger.info(`Device ${deviceId} re-registered by different user: ${req.user.email} (was: ${existingDevice.userEmail})`);
       }
     }
 

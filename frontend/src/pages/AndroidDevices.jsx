@@ -18,10 +18,18 @@ const AndroidDevices = () => {
   const queryClient = useQueryClient();
 
   // Fetch devices
-  const { data: devicesData, isLoading, error } = useQuery(
-    'devices',
+  const { data: devicesData, isLoading, error, refetch } = useQuery(
+    ['devices'],
     () => api.get('/api/devices'),
-    { retry: 1 }
+    { 
+      retry: 1,
+      refetchOnWindowFocus: true,
+      refetchInterval: 30000, // Refresh every 30 seconds
+      onError: (error) => {
+        console.error('Error fetching devices:', error);
+        toast.error('Failed to load devices');
+      }
+    }
   );
 
   // Register device mutation
@@ -106,6 +114,21 @@ const AndroidDevices = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col justify-center items-center h-64">
+        <div className="text-red-500 text-xl mb-4">❌ Error loading devices</div>
+        <p className="text-gray-600 mb-4">{error.message}</p>
+        <button 
+          onClick={() => refetch()}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -114,12 +137,20 @@ const AndroidDevices = () => {
           <h1 className="text-2xl font-bold text-gray-900">Android Devices</h1>
           <p className="text-gray-600">Manage your connected Android devices for IVR calling</p>
         </div>
-        <button
-          onClick={() => setShowAddDevice(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Add Device
-        </button>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => refetch()}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+          >
+            🔄 Refresh
+          </button>
+          <button
+            onClick={() => setShowAddDevice(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Add Device
+          </button>
+        </div>
       </div>
 
       {/* Connection Instructions */}
