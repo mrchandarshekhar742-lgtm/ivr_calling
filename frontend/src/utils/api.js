@@ -3,7 +3,7 @@ import { toast } from 'react-hot-toast';
 
 // Create axios instance
 const api = axios.create({
-  baseURL: 'https://ivr.wxon.in/api',
+  baseURL: 'https://ivr.wxon.in',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',

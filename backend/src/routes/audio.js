@@ -140,16 +140,14 @@ router.post('/', auth, upload.single('audio'), [
 
     const { name, description, category = 'general', tags = [], isPublic = false } = req.body;
 
-    // Read file data into buffer for BLOB storage
-    const audioData = await fs.readFile(req.file.path);
-
-    // Create audio file record with BLOB data
+    // Create audio file record with file path (not BLOB)
     const audioFile = await AudioFile.create({
       name,
       originalName: req.file.originalname,
+      filename: req.file.filename,
+      filePath: req.file.path,
       mimeType: req.file.mimetype,
       size: req.file.size,
-      audioData, // Store file data as BLOB
       category,
       description,
       tags: Array.isArray(tags) ? tags : [],
@@ -157,13 +155,7 @@ router.post('/', auth, upload.single('audio'), [
       isPublic: Boolean(isPublic)
     });
 
-    // Clean up temporary file after storing in database
-    try {
-      await fs.unlink(req.file.path);
-    } catch (unlinkError) {
-      logger.warn('Failed to clean up temporary file:', unlinkError);
-    }
-
+    // Don't delete the file - keep it on disk
     logger.info(`Audio file uploaded: ${audioFile.name} by ${req.user.email}`);
 
     res.status(201).json({
@@ -360,11 +352,12 @@ router.get('/:id/download', auth, async (req, res) => {
       });
     }
 
-    // Check if audio data exists
-    if (!audioFile.audioData) {
+    // Check if file exists on disk
+    const fileExists = await fs.access(audioFile.filePath).then(() => true).catch(() => false);
+    if (!fileExists) {
       return res.status(404).json({
         success: false,
-        message: 'Audio data not found'
+        message: 'Audio file not found on disk'
       });
     }
 
@@ -376,8 +369,9 @@ router.get('/:id/download', auth, async (req, res) => {
     res.setHeader('Content-Type', audioFile.mimeType);
     res.setHeader('Content-Length', audioFile.size);
 
-    // Send audio data from database
-    res.send(audioFile.audioData);
+    // Stream file from disk
+    const fileStream = require('fs').createReadStream(audioFile.filePath);
+    fileStream.pipe(res);
 
     logger.info(`Audio file downloaded: ${audioFile.name} by ${req.user.email}`);
   } catch (error) {
@@ -402,16 +396,17 @@ router.get('/:id/stream', auth, async (req, res) => {
       });
     }
 
-    // Check if audio data exists
-    if (!audioFile.audioData) {
+    // Check if file exists on disk
+    const fileExists = await fs.access(audioFile.filePath).then(() => true).catch(() => false);
+    if (!fileExists) {
       return res.status(404).json({
         success: false,
-        message: 'Audio data not found'
+        message: 'Audio file not found on disk'
       });
     }
 
     // Set CORS headers for audio streaming
-    res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'http://localhost:3000');
+    res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'https://ivr.wxon.in');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Range, Accept-Ranges');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
@@ -420,25 +415,29 @@ router.get('/:id/stream', auth, async (req, res) => {
     res.setHeader('Content-Type', audioFile.mimeType);
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.setHeader('Content-Length', audioFile.size);
 
     // Handle range requests for audio seeking
     const range = req.headers.range;
+    const stat = await fs.stat(audioFile.filePath);
+    
     if (range) {
       const parts = range.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : audioFile.size - 1;
+      const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
       const chunksize = (end - start) + 1;
       
       res.status(206);
-      res.setHeader('Content-Range', `bytes ${start}-${end}/${audioFile.size}`);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${stat.size}`);
       res.setHeader('Content-Length', chunksize);
       
-      // Send partial content
-      res.send(audioFile.audioData.slice(start, end + 1));
+      // Stream partial content
+      const fileStream = require('fs').createReadStream(audioFile.filePath, { start, end });
+      fileStream.pipe(res);
     } else {
-      // Send full audio data
-      res.send(audioFile.audioData);
+      // Stream full file
+      res.setHeader('Content-Length', stat.size);
+      const fileStream = require('fs').createReadStream(audioFile.filePath);
+      fileStream.pipe(res);
     }
 
     logger.info(`Audio file streamed: ${audioFile.name} by ${req.user.email}`);
