@@ -29,7 +29,6 @@ const Layout = ({ children }) => {
     { name: 'Campaigns', href: '/campaigns', icon: MegaphoneIcon },
     { name: 'Contacts', href: '/contacts', icon: UsersIcon },
     { name: 'Audio Files', href: '/audio', icon: SpeakerWaveIcon },
-    { name: 'Call Templates', href: '/templates', icon: DocumentTextIcon },
     { name: 'Call Scheduler', href: '/scheduler', icon: ClockIcon },
     { name: 'Call Logs', href: '/call-logs', icon: PhoneIcon },
     { name: 'Android Devices', href: '/devices', icon: DevicePhoneMobileIcon },

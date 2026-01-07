@@ -1,8 +1,10 @@
 package com.ivrcallmanager;
 
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -87,17 +89,36 @@ public class LoginActivity extends AppCompatActivity {
             // Use simple HTTP request instead of Retrofit
             executor.execute(() -> {
                 try {
-                    String result = makeLoginRequest(email, password);
+                    // Step 1: Login
+                    String loginResult = makeLoginRequest(email, password);
                     
-                    mainHandler.post(() -> {
-                        try {
+                    if (loginResult != null) {
+                        // Step 2: Auto-register device
+                        String deviceId = generateDeviceId();
+                        String deviceName = getDeviceName();
+                        boolean deviceRegistered = registerDeviceAfterLogin(loginResult, deviceId, deviceName);
+                        
+                        mainHandler.post(() -> {
+                            try {
+                                setLoading(false);
+                                if (deviceRegistered) {
+                                    handleLoginResponse(loginResult);
+                                    Toast.makeText(this, "Login successful! Device is online.", Toast.LENGTH_SHORT).show();
+                                } else {
+                                    handleLoginResponse(loginResult);
+                                    Toast.makeText(this, "Login successful! (Device registration pending)", Toast.LENGTH_SHORT).show();
+                                }
+                            } catch (Exception e) {
+                                Log.e(TAG, "Error handling response", e);
+                                Toast.makeText(this, "Error processing response", Toast.LENGTH_LONG).show();
+                            }
+                        });
+                    } else {
+                        mainHandler.post(() -> {
                             setLoading(false);
-                            handleLoginResponse(result);
-                        } catch (Exception e) {
-                            Log.e(TAG, "Error handling response", e);
-                            Toast.makeText(this, "Error processing response", Toast.LENGTH_LONG).show();
-                        }
-                    });
+                            Toast.makeText(this, "Login failed. Please check credentials.", Toast.LENGTH_LONG).show();
+                        });
+                    }
                     
                 } catch (Exception e) {
                     Log.e(TAG, "Login request failed", e);
@@ -210,6 +231,61 @@ public class LoginActivity extends AppCompatActivity {
         } catch (Exception e) {
             Log.e(TAG, "Error in setLoading", e);
         }
+    }
+    
+    private boolean registerDeviceAfterLogin(String token, String deviceId, String deviceName) {
+        try {
+            URL url = new URL("https://ivr.wxon.in/api/devices/register");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("Authorization", "Bearer " + token);
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(15000);
+            
+            // Create device registration JSON
+            JSONObject json = new JSONObject();
+            json.put("deviceId", deviceId);
+            json.put("deviceName", deviceName);
+            json.put("androidVersion", Build.VERSION.RELEASE);
+            json.put("deviceModel", Build.MODEL);
+            json.put("appVersion", "2.0.0");
+            
+            // Send request
+            OutputStream os = conn.getOutputStream();
+            os.write(json.toString().getBytes("UTF-8"));
+            os.close();
+            
+            int responseCode = conn.getResponseCode();
+            Log.d(TAG, "Device registration response: " + responseCode);
+            
+            if (responseCode >= 200 && responseCode < 300) {
+                // Save device info
+                PreferenceManager.saveDeviceData(this, deviceId, deviceName);
+                return true;
+            }
+            
+            return false;
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Device registration failed", e);
+            return false;
+        }
+    }
+    
+    private String generateDeviceId() {
+        // Generate unique device ID
+        String androidId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+        return "DEVICE_" + androidId + "_" + System.currentTimeMillis();
+    }
+    
+    private String getDeviceName() {
+        String manufacturer = Build.MANUFACTURER;
+        String model = Build.MODEL;
+        return manufacturer + " " + model;
     }
     
     @Override

@@ -115,7 +115,7 @@ router.post('/register', auth, [
       appVersion: appVersion || '1.0.0',
       userId: req.user.id,
       userEmail: req.user.email,
-      status: 'active',
+      status: 'online', // Automatically set to online on registration
       token: deviceToken,
       registeredAt: new Date().toISOString(),
       lastSeen: new Date().toISOString(),

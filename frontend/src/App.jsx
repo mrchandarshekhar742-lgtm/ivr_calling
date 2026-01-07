@@ -13,7 +13,6 @@ import CampaignDetail from './pages/CampaignDetail.jsx';
 import CreateCampaign from './pages/CreateCampaign.jsx';
 import Contacts from './pages/Contacts.jsx';
 import AudioFiles from './pages/AudioFiles.jsx';
-import CallTemplates from './pages/CallTemplates.jsx';
 import CallScheduler from './pages/CallScheduler.jsx';
 import CallLogs from './pages/CallLogs.jsx';
 import AndroidDevices from './pages/AndroidDevices.jsx';
@@ -125,15 +124,6 @@ function App() {
           element={
             <ProtectedRoute>
               <AudioFiles />
-            </ProtectedRoute>
-          } 
-        />
-        
-        <Route 
-          path="/templates" 
-          element={
-            <ProtectedRoute>
-              <CallTemplates />
             </ProtectedRoute>
           } 
         />

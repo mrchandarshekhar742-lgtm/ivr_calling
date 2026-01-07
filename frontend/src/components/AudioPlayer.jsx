@@ -19,49 +19,37 @@ const AudioPlayer = ({ audioFile, onError }) => {
           throw new Error('No authentication token found');
         }
 
-        // Get temporary streaming token
-        const tokenResponse = await api.get(`/api/audio/${audioFile.id}/token`, {
+        // Direct approach: Get audio as blob
+        const response = await api.get(`/api/audio/${audioFile.id}/download`, {
+          responseType: 'blob',
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
 
-        if (tokenResponse.data.success) {
-          // Use the temporary streaming URL (no auth required)
-          setAudioUrl(tokenResponse.data.data.streamUrl);
-          setLoading(false);
-        } else {
-          throw new Error('Failed to get streaming token');
-        }
+        // Create object URL from blob
+        const blob = new Blob([response.data], { type: audioFile.mimeType || 'audio/mpeg' });
+        const url = URL.createObjectURL(blob);
+        setAudioUrl(url);
+        setLoading(false);
 
       } catch (error) {
         console.error('Failed to load audio:', error);
         setLoading(false);
-        
-        // Fallback: try direct streaming with auth
-        try {
-          const directResponse = await api.get(`/api/audio/${audioFile.id}/stream`, {
-            responseType: 'blob',
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-          
-          // Create object URL from blob
-          const blob = new Blob([directResponse.data], { type: audioFile.mimeType || 'audio/mpeg' });
-          const url = URL.createObjectURL(blob);
-          setAudioUrl(url);
-          setLoading(false);
-        } catch (fallbackError) {
-          console.error('Fallback audio loading failed:', fallbackError);
-          if (onError) {
-            onError(`Failed to load audio: ${audioFile.name}. ${error.response?.data?.message || error.message}`);
-          }
+        if (onError) {
+          onError(`Audio file could not be loaded. Please try uploading again.`);
         }
       }
     };
 
     createAudioUrl();
+
+    // Cleanup function to revoke object URL
+    return () => {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+    };
   }, [audioFile.id, audioFile.name, audioFile.mimeType, onError]);
 
   useEffect(() => {
