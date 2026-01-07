@@ -8,7 +8,7 @@ const AudioPlayer = ({ audioFile, onError }) => {
   const audioRef = useRef(null);
 
   // Use the new streaming endpoint
-  const audioUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/audio/${audioFile.id}/stream`;
+  const audioUrl = `https://ivr.wxon.in/api/audio/${audioFile.id}/stream`;
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -32,7 +32,7 @@ const AudioPlayer = ({ audioFile, onError }) => {
       setLoading(false);
       setIsPlaying(false);
       if (onError) {
-        onError(`Failed to load audio: ${audioFile.name}. Check if backend server is running on port 5000.`);
+        onError(`Failed to load audio: ${audioFile.name}. Check if backend server is running.`);
       }
     };
 

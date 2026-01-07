@@ -152,7 +152,7 @@ const AudioFiles = () => {
       const status = await checkServerStatus();
       
       if (!status.serverRunning) {
-        setError('❌ Backend server is not running on port 5000. Please start it with: cd backend && npm start');
+        setError('❌ Backend server is not running. Please start it.');
       } else if (!status.analyticsWorking) {
         setError('⚠️ Server is running but analytics route is missing. Please restart the backend server to apply recent changes.');
       } else {
