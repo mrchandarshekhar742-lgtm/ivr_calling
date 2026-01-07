@@ -21,7 +21,7 @@ require('./src/models');
 const authRoutes = require('./src/routes/auth');
 const campaignRoutes = require('./src/routes/campaigns');
 const contactRoutes = require('./src/routes/contacts');
-const audioRoutes = require('./src/routes/audio');
+const audioRoutes = require('./src/routes/audio-simple');
 const deviceRoutes = require('./src/routes/devices');
 const analyticsRoutes = require('./src/routes/analytics');
 const templateRoutes = require('./src/routes/templates');
