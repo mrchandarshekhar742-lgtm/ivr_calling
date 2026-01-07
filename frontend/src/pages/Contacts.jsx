@@ -67,6 +67,86 @@ const Contacts = () => {
     }
   };
 
+  const handleBulkImport = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const csv = e.target.result;
+        const lines = csv.split('\n');
+        const headers = lines[0].split(',');
+        
+        const contacts = [];
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',');
+          if (values.length >= 2 && values[0] && values[1]) {
+            contacts.push({
+              name: values[0].trim(),
+              phone: values[1].trim(),
+              email: values[2] ? values[2].trim() : '',
+              notes: values[3] ? values[3].trim() : 'Imported from CSV'
+            });
+          }
+        }
+
+        if (contacts.length > 0) {
+          // Use the bulk-text endpoint
+          handleBulkTextImport(contacts);
+        } else {
+          setError('No valid contacts found in CSV file');
+        }
+      } catch (error) {
+        setError('Failed to parse CSV file');
+        console.error('CSV parse error:', error);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleBulkTextImport = async (contactsData = null) => {
+    const contactsToImport = contactsData || bulkNumbers
+      .split(/[,\n\s]+/)
+      .map(num => num.trim())
+      .filter(num => num.length > 0)
+      .map(num => num.replace(/[^\d+]/g, ''))
+      .map((phone, index) => ({
+        name: `Contact ${index + 1}`,
+        phone: phone,
+        email: '',
+        notes: contactsData ? 'Imported from CSV' : 'Added via bulk text import'
+      }));
+
+    if (contactsToImport.length === 0) {
+      setError('No valid phone numbers found');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      const response = await api.post('/api/contacts/bulk-text', { 
+        contacts: contactsToImport 
+      });
+      
+      setShowBulkText(false);
+      setShowBulkImport(false);
+      setBulkNumbers('');
+      fetchContacts();
+      setError('');
+      
+      const added = response.data.data?.added || contactsToImport.length;
+      alert(`Successfully added ${added} contacts!`);
+      
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to import contacts');
+      console.error('Bulk import error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleBulkTextImport = async () => {
     if (!bulkNumbers.trim()) {
       setError('Please enter phone numbers');
