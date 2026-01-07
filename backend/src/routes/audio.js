@@ -1,32 +1,15 @@
 const express = require('express');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs').promises;
-const { Op } = require('sequelize');
 const { body, validationResult } = require('express-validator');
 const { AudioFile, User } = require('../models');
 const auth = require('../middleware/auth');
 const logger = require('../config/logger');
+const { Op } = require('sequelize');
 
 const router = express.Router();
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../uploads/audio');
-    try {
-      await fs.mkdir(uploadDir, { recursive: true });
-      cb(null, uploadDir);
-    } catch (error) {
-      cb(error);
-    }
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, `audio-${uniqueSuffix}${ext}`);
-  }
-});
+// Configure multer for memory storage (BLOB)
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   // Accept audio files only
@@ -140,12 +123,11 @@ router.post('/', auth, upload.single('audio'), [
 
     const { name, description, category = 'general', tags = [], isPublic = false } = req.body;
 
-    // Create audio file record with file path (not BLOB)
+    // Create audio file record with BLOB data
     const audioFile = await AudioFile.create({
       name,
       originalName: req.file.originalname,
-      filename: req.file.filename,
-      filePath: req.file.path,
+      data: req.file.buffer, // Store file as BLOB
       mimeType: req.file.mimetype,
       size: req.file.size,
       category,
@@ -155,7 +137,6 @@ router.post('/', auth, upload.single('audio'), [
       isPublic: Boolean(isPublic)
     });
 
-    // Don't delete the file - keep it on disk
     logger.info(`Audio file uploaded: ${audioFile.name} by ${req.user.email}`);
 
     res.status(201).json({
@@ -176,16 +157,6 @@ router.post('/', auth, upload.single('audio'), [
     });
   } catch (error) {
     logger.error('Upload audio error:', error);
-    
-    // Clean up uploaded file if database save failed
-    if (req.file) {
-      try {
-        await fs.unlink(req.file.path);
-      } catch (unlinkError) {
-        logger.error('Failed to clean up uploaded file:', unlinkError);
-      }
-    }
-    
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -321,7 +292,7 @@ router.delete('/:id', auth, async (req, res) => {
       });
     }
 
-    // Delete database record (no need to delete physical file since it's stored as BLOB)
+    // Delete database record (BLOB data will be automatically deleted)
     await audioFile.destroy();
 
     logger.info(`Audio file deleted: ${audioFile.name} by ${req.user.email}`);
@@ -352,15 +323,6 @@ router.get('/:id/download', auth, async (req, res) => {
       });
     }
 
-    // Check if file exists on disk
-    const fileExists = await fs.access(audioFile.filePath).then(() => true).catch(() => false);
-    if (!fileExists) {
-      return res.status(404).json({
-        success: false,
-        message: 'Audio file not found on disk'
-      });
-    }
-
     // Increment usage count
     await audioFile.increment('usageCount');
 
@@ -369,9 +331,8 @@ router.get('/:id/download', auth, async (req, res) => {
     res.setHeader('Content-Type', audioFile.mimeType);
     res.setHeader('Content-Length', audioFile.size);
 
-    // Stream file from disk
-    const fileStream = require('fs').createReadStream(audioFile.filePath);
-    fileStream.pipe(res);
+    // Send BLOB data
+    res.send(audioFile.data);
 
     logger.info(`Audio file downloaded: ${audioFile.name} by ${req.user.email}`);
   } catch (error) {
@@ -396,17 +357,140 @@ router.get('/:id/stream', auth, async (req, res) => {
       });
     }
 
-    // Check if file exists on disk
-    const fileExists = await fs.access(audioFile.filePath).then(() => true).catch(() => false);
-    if (!fileExists) {
+    // Set CORS headers for audio streaming
+    res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'https://ivr.wxon.in');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Range, Accept-Ranges, Authorization');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+    
+    // Set headers for audio streaming
+    res.setHeader('Content-Type', audioFile.mimeType);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+
+    // Handle range requests for audio seeking
+    const range = req.headers.range;
+    const audioData = audioFile.data;
+    const audioSize = audioData.length;
+    
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : audioSize - 1;
+      const chunksize = (end - start) + 1;
+      
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${audioSize}`);
+      res.setHeader('Content-Length', chunksize);
+      
+      // Send partial content
+      res.send(audioData.slice(start, end + 1));
+    } else {
+      // Send full file
+      res.setHeader('Content-Length', audioSize);
+      res.send(audioData);
+    }
+
+    logger.info(`Audio file streamed: ${audioFile.name} by ${req.user.email}`);
+  } catch (error) {
+    logger.error('Stream audio file error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   GET /api/audio/:id/token
+// @desc    Generate temporary access token for audio streaming
+// @access  Private
+router.get('/:id/token', auth, async (req, res) => {
+  try {
+    const audioFile = await AudioFile.findByPk(req.params.id);
+    if (!audioFile) {
       return res.status(404).json({
         success: false,
-        message: 'Audio file not found on disk'
+        message: 'Audio file not found'
+      });
+    }
+
+    // Generate temporary token (valid for 1 hour)
+    const crypto = require('crypto');
+    const tempToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Store temp token in memory (in production, use Redis)
+    if (!global.audioTokens) {
+      global.audioTokens = new Map();
+    }
+    
+    global.audioTokens.set(tempToken, {
+      audioId: audioFile.id,
+      userId: req.user.id,
+      expiresAt
+    });
+
+    // Clean up expired tokens
+    for (const [token, data] of global.audioTokens.entries()) {
+      if (data.expiresAt < new Date()) {
+        global.audioTokens.delete(token);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        token: tempToken,
+        streamUrl: `${process.env.API_URL || 'https://ivr.wxon.in/api'}/audio/stream/${tempToken}`,
+        expiresAt: expiresAt.toISOString()
+      }
+    });
+  } catch (error) {
+    logger.error('Generate audio token error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   GET /api/audio/stream/:token
+// @desc    Stream audio file using temporary token (no auth required)
+// @access  Public
+router.get('/stream/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    // Check if token exists and is valid
+    if (!global.audioTokens || !global.audioTokens.has(token)) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired token'
+      });
+    }
+
+    const tokenData = global.audioTokens.get(token);
+    
+    // Check if token is expired
+    if (tokenData.expiresAt < new Date()) {
+      global.audioTokens.delete(token);
+      return res.status(401).json({
+        success: false,
+        message: 'Token expired'
+      });
+    }
+
+    // Get audio file
+    const audioFile = await AudioFile.findByPk(tokenData.audioId);
+    if (!audioFile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Audio file not found'
       });
     }
 
     // Set CORS headers for audio streaming
-    res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'https://ivr.wxon.in');
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Range, Accept-Ranges');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
@@ -418,31 +502,30 @@ router.get('/:id/stream', auth, async (req, res) => {
 
     // Handle range requests for audio seeking
     const range = req.headers.range;
-    const stat = await fs.stat(audioFile.filePath);
+    const audioData = audioFile.data;
+    const audioSize = audioData.length;
     
     if (range) {
       const parts = range.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+      const end = parts[1] ? parseInt(parts[1], 10) : audioSize - 1;
       const chunksize = (end - start) + 1;
       
       res.status(206);
-      res.setHeader('Content-Range', `bytes ${start}-${end}/${stat.size}`);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${audioSize}`);
       res.setHeader('Content-Length', chunksize);
       
-      // Stream partial content
-      const fileStream = require('fs').createReadStream(audioFile.filePath, { start, end });
-      fileStream.pipe(res);
+      // Send partial content
+      res.send(audioData.slice(start, end + 1));
     } else {
-      // Stream full file
-      res.setHeader('Content-Length', stat.size);
-      const fileStream = require('fs').createReadStream(audioFile.filePath);
-      fileStream.pipe(res);
+      // Send full file
+      res.setHeader('Content-Length', audioSize);
+      res.send(audioData);
     }
 
-    logger.info(`Audio file streamed: ${audioFile.name} by ${req.user.email}`);
+    logger.info(`Audio file streamed via token: ${audioFile.name}`);
   } catch (error) {
-    logger.error('Stream audio file error:', error);
+    logger.error('Stream audio via token error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

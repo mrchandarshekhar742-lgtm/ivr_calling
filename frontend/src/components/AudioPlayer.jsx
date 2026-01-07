@@ -1,21 +1,72 @@
 import React, { useState, useRef, useEffect } from 'react';
+import api from '../utils/api.js';
 
 const AudioPlayer = ({ audioFile, onError }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [audioUrl, setAudioUrl] = useState(null);
   const audioRef = useRef(null);
 
-  // Use the new streaming endpoint
-  const audioUrl = `https://ivr.wxon.in/api/audio/${audioFile.id}/stream`;
+  // Create authenticated audio URL using temporary token
+  useEffect(() => {
+    const createAudioUrl = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        // Get temporary streaming token
+        const tokenResponse = await api.get(`/api/audio/${audioFile.id}/token`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (tokenResponse.data.success) {
+          // Use the temporary streaming URL (no auth required)
+          setAudioUrl(tokenResponse.data.data.streamUrl);
+          setLoading(false);
+        } else {
+          throw new Error('Failed to get streaming token');
+        }
+
+      } catch (error) {
+        console.error('Failed to load audio:', error);
+        setLoading(false);
+        
+        // Fallback: try direct streaming with auth
+        try {
+          const directResponse = await api.get(`/api/audio/${audioFile.id}/stream`, {
+            responseType: 'blob',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          
+          // Create object URL from blob
+          const blob = new Blob([directResponse.data], { type: audioFile.mimeType || 'audio/mpeg' });
+          const url = URL.createObjectURL(blob);
+          setAudioUrl(url);
+          setLoading(false);
+        } catch (fallbackError) {
+          console.error('Fallback audio loading failed:', fallbackError);
+          if (onError) {
+            onError(`Failed to load audio: ${audioFile.name}. ${error.response?.data?.message || error.message}`);
+          }
+        }
+      }
+    };
+
+    createAudioUrl();
+  }, [audioFile.id, audioFile.name, audioFile.mimeType, onError]);
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
-
-    // Set crossOrigin to handle CORS
-    audio.crossOrigin = 'anonymous';
+    if (!audio || !audioUrl) return;
 
     const updateTime = () => setCurrentTime(audio.currentTime);
     const updateDuration = () => setDuration(audio.duration);
@@ -23,16 +74,16 @@ const AudioPlayer = ({ audioFile, onError }) => {
     const handleLoadStart = () => setLoading(true);
     const handleCanPlay = () => setLoading(false);
     const handleError = (e) => {
-      console.error('Audio error details:', {
+      console.error('Audio playback error:', {
         error: e,
-        audioUrl,
+        audioFile: audioFile.name,
         readyState: audio.readyState,
         networkState: audio.networkState
       });
       setLoading(false);
       setIsPlaying(false);
       if (onError) {
-        onError(`Failed to load audio: ${audioFile.name}. Check if backend server is running.`);
+        onError(`Failed to play audio: ${audioFile.name}. The audio file may be corrupted or in an unsupported format.`);
       }
     };
 
@@ -51,11 +102,11 @@ const AudioPlayer = ({ audioFile, onError }) => {
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
     };
-  }, [audioFile, onError, audioUrl]);
+  }, [audioFile.name, onError, audioUrl]);
 
   const togglePlay = async () => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || !audioUrl) return;
 
     try {
       if (isPlaying) {
@@ -97,23 +148,22 @@ const AudioPlayer = ({ audioFile, onError }) => {
         ref={audioRef}
         src={audioUrl}
         preload="metadata"
-        crossOrigin="anonymous"
       />
       
       <div className="flex items-center space-x-4">
         {/* Play/Pause Button */}
         <button
           onClick={togglePlay}
-          disabled={loading}
+          disabled={loading || !audioUrl}
           className={`flex items-center justify-center w-10 h-10 rounded-full ${
-            loading 
+            loading || !audioUrl
               ? 'bg-gray-300 cursor-not-allowed' 
               : isPlaying 
                 ? 'bg-red-500 hover:bg-red-600' 
                 : 'bg-green-500 hover:bg-green-600'
           } text-white transition-colors`}
         >
-          {loading ? (
+          {loading || !audioUrl ? (
             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : isPlaying ? (
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -158,8 +208,8 @@ const AudioPlayer = ({ audioFile, onError }) => {
 
       {/* Debug Info */}
       <div className="mt-2 text-xs text-gray-400">
-        <div>URL: {audioUrl}</div>
-        <div>Status: {loading ? 'Loading...' : isPlaying ? 'Playing' : 'Paused'}</div>
+        <div>Status: {loading ? 'Loading...' : !audioUrl ? 'No audio URL' : isPlaying ? 'Playing' : 'Ready'}</div>
+        {audioUrl && <div>Audio loaded: ✅</div>}
       </div>
     </div>
   );

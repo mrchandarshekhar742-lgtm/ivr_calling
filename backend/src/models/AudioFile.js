@@ -19,15 +19,10 @@ const AudioFile = sequelize.define('AudioFile', {
     type: DataTypes.STRING(255),
     allowNull: false
   },
-  filename: {
-    type: DataTypes.STRING(255),
+  data: {
+    type: DataTypes.BLOB('long'),
     allowNull: false,
-    comment: 'Stored filename on disk'
-  },
-  filePath: {
-    type: DataTypes.STRING(500),
-    allowNull: false,
-    comment: 'Full path to audio file'
+    comment: 'Audio file binary data stored as BLOB'
   },
   mimeType: {
     type: DataTypes.STRING(50),
