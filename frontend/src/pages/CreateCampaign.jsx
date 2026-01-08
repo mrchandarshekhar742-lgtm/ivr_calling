@@ -69,7 +69,18 @@ const CreateCampaign = () => {
 
     try {
       const response = await api.post('/api/campaigns', formData);
-      navigate(`/campaigns/${response.data.id}`);
+      console.log('Campaign created:', response.data);
+      
+      // Handle different response structures
+      const campaignData = response.data.data || response.data;
+      const campaignId = campaignData?.id;
+      
+      if (campaignId) {
+        navigate(`/campaigns/${campaignId}`);
+      } else {
+        // If no ID, just go to campaigns list
+        navigate('/campaigns');
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create campaign');
       console.error('Create campaign error:', err);

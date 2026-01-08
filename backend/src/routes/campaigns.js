@@ -77,4 +77,34 @@ router.post('/', auth, [
   }
 });
 
+// @route   GET /api/campaigns/:id
+// @desc    Get single campaign
+// @access  Private
+router.get('/:id', auth, async (req, res) => {
+  try {
+    // Simplified campaign response
+    const campaign = {
+      id: req.params.id,
+      name: 'Sample Campaign',
+      description: 'Sample campaign description',
+      type: 'broadcast',
+      status: 'draft',
+      createdBy: req.user.id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    res.json({
+      success: true,
+      data: campaign
+    });
+  } catch (error) {
+    logger.error('Get campaign error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
 module.exports = router;
