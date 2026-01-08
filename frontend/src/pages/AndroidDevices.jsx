@@ -22,12 +22,20 @@ const AndroidDevices = () => {
     ['devices'],
     () => api.get('/api/devices'),
     { 
-      retry: 1,
+      retry: (failureCount, error) => {
+        // Don't retry on authentication errors
+        if (error?.response?.status === 401 || error?.response?.status === 403) {
+          return false;
+        }
+        return failureCount < 1;
+      },
       refetchOnWindowFocus: true,
       refetchInterval: 30000, // Refresh every 30 seconds
       onError: (error) => {
         console.error('Error fetching devices:', error);
-        toast.error('Failed to load devices');
+        if (error?.response?.status !== 401) {
+          toast.error('Failed to load devices');
+        }
       }
     }
   );

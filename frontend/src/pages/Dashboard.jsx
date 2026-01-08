@@ -35,7 +35,13 @@ const Dashboard = () => {
       }
     },
     refetchInterval: 30000, // Refresh every 30 seconds
-    retry: 1,
+    retry: (failureCount, error) => {
+      // Don't retry on authentication errors
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        return false;
+      }
+      return failureCount < 1;
+    },
     onError: (error) => {
       console.error('Dashboard query error:', error);
     }
