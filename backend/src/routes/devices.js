@@ -281,7 +281,9 @@ router.put('/:deviceId/status', auth, [
     }
 
     // Update device status
-    await device.updateStatus(req.body.status);
+    device.status = req.body.status;
+    device.lastSeen = new Date();
+    await device.save();
 
     logger.info(`Device status updated in database: ${device.deviceName} -> ${req.body.status}`);
 

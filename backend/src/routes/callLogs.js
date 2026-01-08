@@ -13,7 +13,7 @@ const router = express.Router();
 // @access  Private
 router.get('/export/csv', auth, async (req, res) => {
   try {
-    const { status, campaignId, startDate, endDate, search } = req.query;
+    const { status, campaignId, startDate, endDate } = req.query;
 
     const whereClause = { userId: req.user.id };
     if (status) whereClause.status = status;
@@ -27,12 +27,14 @@ router.get('/export/csv', auth, async (req, res) => {
         {
           model: Campaign,
           as: 'campaign',
-          attributes: ['id', 'name', 'type']
+          attributes: ['id', 'name', 'type'],
+          required: false
         },
         {
           model: Contact,
           as: 'contact',
-          attributes: ['id', 'name', 'phone']
+          attributes: ['id', 'name', 'phone'],
+          required: false
         }
       ],
       order: [['createdAt', 'DESC']]
@@ -73,7 +75,7 @@ router.get('/export/csv', auth, async (req, res) => {
 // @access  Private
 router.get('/', auth, async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, campaignId, startDate, endDate, search } = req.query;
+    const { page = 1, limit = 20, status, campaignId } = req.query;
     const offset = (page - 1) * limit;
 
     const whereClause = { userId: req.user.id };
@@ -86,12 +88,14 @@ router.get('/', auth, async (req, res) => {
         {
           model: Campaign,
           as: 'campaign',
-          attributes: ['id', 'name', 'type']
+          attributes: ['id', 'name', 'type'],
+          required: false
         },
         {
           model: Contact,
           as: 'contact',
-          attributes: ['id', 'name', 'phone']
+          attributes: ['id', 'name', 'phone'],
+          required: false
         }
       ],
       limit: parseInt(limit),
@@ -104,11 +108,11 @@ router.get('/', auth, async (req, res) => {
       id: log.id,
       campaignId: log.campaignId,
       contactId: log.contactId,
-      phoneNumber: log.contact?.phone || 'N/A', // Frontend expects phoneNumber
+      phoneNumber: log.contact?.phone || 'N/A',
       status: log.status,
       duration: log.duration,
       dtmfResponse: log.dtmfResponse,
-      calledAt: log.startTime, // Frontend expects calledAt
+      calledAt: log.startTime,
       deviceId: log.deviceId,
       campaign: log.campaign,
       contact: log.contact,

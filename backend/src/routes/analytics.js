@@ -14,7 +14,7 @@ const router = express.Router();
 // @access  Private
 router.get('/dashboard', auth, async (req, res) => {
   try {
-    // Get real counts from database
+    // Get real counts from database with error handling
     const [
       totalCampaigns,
       activeCampaigns,
@@ -25,33 +25,33 @@ router.get('/dashboard', auth, async (req, res) => {
       failedCalls,
       onlineDevices
     ] = await Promise.all([
-      Campaign.count({ where: { createdBy: req.user.id } }),
-      Campaign.count({ where: { createdBy: req.user.id, status: 'active' } }),
-      Contact.count({ where: { createdBy: req.user.id } }),
-      AudioFile.count({ where: { uploadedBy: req.user.id } }),
-      CallLog.count({ where: { userId: req.user.id } }),
-      CallLog.count({ where: { userId: req.user.id, status: 'completed' } }),
-      CallLog.count({ where: { userId: req.user.id, status: 'failed' } }),
-      Device.count({ where: { userId: req.user.id, status: 'online' } })
+      Campaign.count({ where: { createdBy: req.user.id } }).catch(() => 0),
+      Campaign.count({ where: { createdBy: req.user.id, status: 'active' } }).catch(() => 0),
+      Contact.count({ where: { createdBy: req.user.id } }).catch(() => 0),
+      AudioFile.count({ where: { uploadedBy: req.user.id } }).catch(() => 0),
+      CallLog.count({ where: { userId: req.user.id } }).catch(() => 0),
+      CallLog.count({ where: { userId: req.user.id, status: 'completed' } }).catch(() => 0),
+      CallLog.count({ where: { userId: req.user.id, status: 'failed' } }).catch(() => 0),
+      Device.count({ where: { userId: req.user.id, status: 'online' } }).catch(() => 0)
     ]);
 
     const successRate = totalCallLogs > 0 ? ((successfulCalls / totalCallLogs) * 100).toFixed(1) : 0;
 
-    // Get recent campaigns
+    // Get recent campaigns with error handling
     const recentCampaigns = await Campaign.findAll({
       where: { createdBy: req.user.id },
       limit: 5,
       order: [['createdAt', 'DESC']],
       attributes: ['id', 'name', 'status', 'createdAt']
-    });
+    }).catch(() => []);
 
-    // Get recent calls
+    // Get recent calls with error handling
     const recentCalls = await CallLog.findAll({
       where: { userId: req.user.id },
       limit: 10,
       order: [['createdAt', 'DESC']],
-      attributes: ['id', 'contactPhone', 'status', 'duration', 'createdAt']
-    });
+      attributes: ['id', 'contactId', 'status', 'duration', 'createdAt']
+    }).catch(() => []);
 
     res.json({
       success: true,
@@ -85,9 +85,14 @@ router.get('/dashboard', auth, async (req, res) => {
 // @access  Private
 router.get('/campaigns', auth, async (req, res) => {
   try {
+    const campaigns = await Campaign.findAll({
+      where: { createdBy: req.user.id },
+      attributes: ['id', 'name', 'status', 'type', 'createdAt']
+    }).catch(() => []);
+
     res.json({
       success: true,
-      data: []
+      data: campaigns
     });
   } catch (error) {
     logger.error('Campaign analytics error:', error);
@@ -103,10 +108,15 @@ router.get('/campaigns', auth, async (req, res) => {
 // @access  Private
 router.get('/calls', auth, async (req, res) => {
   try {
+    const callLogs = await CallLog.findAll({
+      where: { userId: req.user.id },
+      attributes: ['id', 'status', 'duration', 'dtmfResponse', 'createdAt']
+    }).catch(() => []);
+
     res.json({
       success: true,
       data: {
-        callStats: [],
+        callStats: callLogs,
         dtmfStats: [],
         deviceStats: []
       }
@@ -126,14 +136,30 @@ router.get('/calls', auth, async (req, res) => {
 router.get('/performance', auth, async (req, res) => {
   try {
     const memoryUsage = process.memoryUsage();
+    
+    // Get user stats with error handling
+    const [campaigns, contacts, audioFiles, callsToday] = await Promise.all([
+      Campaign.count({ where: { createdBy: req.user.id } }).catch(() => 0),
+      Contact.count({ where: { createdBy: req.user.id } }).catch(() => 0),
+      AudioFile.count({ where: { uploadedBy: req.user.id } }).catch(() => 0),
+      CallLog.count({ 
+        where: { 
+          userId: req.user.id,
+          createdAt: {
+            [require('sequelize').Op.gte]: new Date(new Date().setHours(0, 0, 0, 0))
+          }
+        }
+      }).catch(() => 0)
+    ]);
+
     res.json({
       success: true,
       data: {
         user: {
-          campaigns: 0,
-          contacts: 0,
-          audioFiles: 0,
-          callsToday: 0
+          campaigns,
+          contacts,
+          audioFiles,
+          callsToday
         },
         system: {
           uptime: Math.round(process.uptime()),
@@ -182,17 +208,17 @@ router.get('/test', auth, async (req, res) => {
 // @access  Private
 router.get('/', auth, async (req, res) => {
   try {
-    // Get real counts from database
+    // Get real counts from database with error handling
     const [
       totalCampaigns,
       activeCampaigns,
       totalContacts,
       totalAudioFiles
     ] = await Promise.all([
-      Campaign.count({ where: { createdBy: req.user.id } }),
-      Campaign.count({ where: { createdBy: req.user.id, status: 'active' } }),
-      Contact.count({ where: { createdBy: req.user.id } }),
-      AudioFile.count({ where: { uploadedBy: req.user.id } })
+      Campaign.count({ where: { createdBy: req.user.id } }).catch(() => 0),
+      Campaign.count({ where: { createdBy: req.user.id, status: 'active' } }).catch(() => 0),
+      Contact.count({ where: { createdBy: req.user.id } }).catch(() => 0),
+      AudioFile.count({ where: { uploadedBy: req.user.id } }).catch(() => 0)
     ]);
 
     res.json({

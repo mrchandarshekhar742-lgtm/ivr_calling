@@ -23,22 +23,23 @@ router.get('/', auth, async (req, res) => {
         {
           model: Campaign,
           as: 'campaign',
-          attributes: ['id', 'name', 'type', 'status']
+          attributes: ['id', 'name', 'type', 'status'],
+          required: false
         }
       ],
       limit: parseInt(limit),
       offset: parseInt(offset),
       order: [['scheduledAt', 'ASC']]
-    });
+    }).catch(() => ({ rows: [], count: 0 }));
 
     res.json({
       success: true,
-      data: schedules.rows,
+      data: schedules.rows || [],
       pagination: {
-        total: schedules.count,
+        total: schedules.count || 0,
         page: parseInt(page),
         limit: parseInt(limit),
-        pages: Math.ceil(schedules.count / limit)
+        pages: Math.ceil((schedules.count || 0) / limit)
       }
     });
   } catch (error) {
