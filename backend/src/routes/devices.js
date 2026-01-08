@@ -15,63 +15,31 @@ const generateDeviceToken = (deviceId, userId) => {
     .substring(0, 32);
 };
 
-// @route   GET /api/devices
-// @desc    Get all registered Android devices for current user
+// @route   GET /api/devices/stats/summary
+// @desc    Get devices statistics summary
 // @access  Private
-router.get('/', auth, async (req, res) => {
+router.get('/stats/summary', auth, async (req, res) => {
   try {
     const userDevices = await Device.findAll({
-      where: { userId: req.user.id },
-      order: [['lastSeen', 'DESC']]
+      where: { userId: req.user.id }
     });
 
-    const devicesWithTokenPreview = userDevices.map(device => ({
-      ...device.toJSON(),
-      // Don't expose full token in list
-      tokenPreview: device.token ? `${device.token.substring(0, 8)}...` : null
-    }));
-
-    res.json({
-      success: true,
-      data: {
-        devices: devicesWithTokenPreview,
-        total: userDevices.length
-      }
-    });
-  } catch (error) {
-    logger.error('Get devices error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
-// @route   GET /api/devices/:deviceId
-// @desc    Get single device with full token
-// @access  Private
-router.get('/:deviceId', auth, async (req, res) => {
-  try {
-    const device = await Device.findOne({
-      where: { 
-        deviceId: req.params.deviceId,
-        userId: req.user.id 
-      }
-    });
-    
-    if (!device) {
-      return res.status(404).json({
-        success: false,
-        message: 'Device not found'
-      });
-    }
+    const stats = {
+      totalDevices: userDevices.length,
+      onlineDevices: userDevices.filter(d => d.status === 'online').length,
+      offlineDevices: userDevices.filter(d => d.status === 'offline').length,
+      busyDevices: userDevices.filter(d => d.status === 'busy').length,
+      totalCalls: userDevices.reduce((sum, d) => sum + (d.stats?.totalCalls || 0), 0),
+      successfulCalls: userDevices.reduce((sum, d) => sum + (d.stats?.successfulCalls || 0), 0),
+      failedCalls: userDevices.reduce((sum, d) => sum + (d.stats?.failedCalls || 0), 0)
+    };
 
     res.json({
       success: true,
-      data: device
+      data: stats
     });
   } catch (error) {
-    logger.error('Get device error:', error);
+    logger.error('Get device stats error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -218,6 +186,70 @@ router.post('/register', auth, [
   }
 });
 
+// @route   GET /api/devices
+// @desc    Get all registered Android devices for current user
+// @access  Private
+router.get('/', auth, async (req, res) => {
+  try {
+    const userDevices = await Device.findAll({
+      where: { userId: req.user.id },
+      order: [['lastSeen', 'DESC']]
+    });
+
+    const devicesWithTokenPreview = userDevices.map(device => ({
+      ...device.toJSON(),
+      // Don't expose full token in list
+      tokenPreview: device.token ? `${device.token.substring(0, 8)}...` : null
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        devices: devicesWithTokenPreview,
+        total: userDevices.length
+      }
+    });
+  } catch (error) {
+    logger.error('Get devices error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   GET /api/devices/:deviceId
+// @desc    Get single device with full token
+// @access  Private
+router.get('/:deviceId', auth, async (req, res) => {
+  try {
+    const device = await Device.findOne({
+      where: { 
+        deviceId: req.params.deviceId,
+        userId: req.user.id 
+      }
+    });
+    
+    if (!device) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: device
+    });
+  } catch (error) {
+    logger.error('Get device error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
 // @route   PUT /api/devices/:deviceId/status
 // @desc    Update device status (online/offline)
 // @access  Private
@@ -342,38 +374,6 @@ router.post('/:deviceId/test', auth, async (req, res) => {
     });
   } catch (error) {
     logger.error('Test device error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
-// @route   GET /api/devices/stats/summary
-// @desc    Get devices statistics summary
-// @access  Private
-router.get('/stats/summary', auth, async (req, res) => {
-  try {
-    const userDevices = await Device.findAll({
-      where: { userId: req.user.id }
-    });
-
-    const stats = {
-      totalDevices: userDevices.length,
-      onlineDevices: userDevices.filter(d => d.status === 'online').length,
-      offlineDevices: userDevices.filter(d => d.status === 'offline').length,
-      busyDevices: userDevices.filter(d => d.status === 'busy').length,
-      totalCalls: userDevices.reduce((sum, d) => sum + (d.stats?.totalCalls || 0), 0),
-      successfulCalls: userDevices.reduce((sum, d) => sum + (d.stats?.successfulCalls || 0), 0),
-      failedCalls: userDevices.reduce((sum, d) => sum + (d.stats?.failedCalls || 0), 0)
-    };
-
-    res.json({
-      success: true,
-      data: stats
-    });
-  } catch (error) {
-    logger.error('Get device stats error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

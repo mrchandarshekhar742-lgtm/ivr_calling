@@ -20,7 +20,21 @@ const Contact = sequelize.define('Contact', {
     allowNull: false,
     validate: {
       notEmpty: true,
-      is: /^[\+]?[1-9][\d]{0,15}$/
+      isValidPhone(value) {
+        // Normalize phone number - remove all non-digits except +
+        const normalized = value.replace(/[^\d+]/g, '');
+        // Check if it's a valid phone number (10-15 digits, optional + prefix)
+        if (!/^[\+]?[1-9][\d]{9,14}$/.test(normalized)) {
+          throw new Error('Phone number must be 10-15 digits, optionally starting with +');
+        }
+      }
+    },
+    set(value) {
+      // Normalize phone number before saving
+      if (value) {
+        const normalized = value.replace(/[^\d+]/g, '');
+        this.setDataValue('phone', normalized);
+      }
     }
   },
   email: {

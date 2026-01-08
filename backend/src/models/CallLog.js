@@ -23,6 +23,14 @@ const CallLog = sequelize.define('CallLog', {
       key: 'id'
     }
   },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'users',
+      key: 'id'
+    }
+  },
   deviceId: {
     type: DataTypes.STRING(100),
     allowNull: true

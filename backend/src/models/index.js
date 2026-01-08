@@ -20,6 +20,9 @@ AudioFile.belongsTo(User, { foreignKey: 'uploadedBy', as: 'uploader' });
 User.hasMany(Device, { foreignKey: 'userId', as: 'devices' });
 Device.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
+User.hasMany(CallLog, { foreignKey: 'userId', as: 'callLogs' });
+CallLog.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
 Campaign.hasMany(Contact, { foreignKey: 'campaignId', as: 'contacts' });
 Contact.belongsTo(Campaign, { foreignKey: 'campaignId', as: 'campaign' });
 
