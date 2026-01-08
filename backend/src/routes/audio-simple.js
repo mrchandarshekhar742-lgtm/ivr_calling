@@ -202,6 +202,12 @@ router.get('/:id/download', auth, async (req, res) => {
       const end = parts[1] ? parseInt(parts[1], 10) : audioFile.size - 1;
       const chunksize = (end - start) + 1;
       
+      if (isNaN(start) || start < 0 || start >= audioFile.size || isNaN(end) || end < start) {
+        res.status(416);
+        res.setHeader('Content-Range', `bytes */${audioFile.size}`);
+        return res.end();
+      }
+      
       res.status(206);
       res.setHeader('Content-Range', `bytes ${start}-${end}/${audioFile.size}`);
       res.setHeader('Content-Length', chunksize);

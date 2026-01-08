@@ -14,6 +14,14 @@ const auth = async (req, res, next) => {
       });
     }
 
+    if (!process.env.JWT_SECRET) {
+      logger.error('JWT secret missing in environment');
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication unavailable'
+      });
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findByPk(decoded.userId);
 
@@ -43,6 +51,13 @@ const auth = async (req, res, next) => {
     }
 
     if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token'
+      });
+    }
+
+    if (error.message && error.message.includes('secret or public key must be provided')) {
       return res.status(401).json({
         success: false,
         message: 'Invalid token'
