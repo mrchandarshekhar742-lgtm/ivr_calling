@@ -19,25 +19,30 @@ const AudioPlayer = ({ audioFile, onError }) => {
           throw new Error('No authentication token found');
         }
 
-        // Direct approach: Get audio as blob
+        // Direct approach: Get audio as blob with proper headers
         const response = await api.get(`/api/audio/${audioFile.id}/download`, {
           responseType: 'blob',
           headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'audio/*',
+            'Cache-Control': 'no-cache'
           }
         });
 
-        // Create object URL from blob
-        const blob = new Blob([response.data], { type: audioFile.mimeType || 'audio/mpeg' });
+        // Create object URL from blob with proper MIME type
+        const mimeType = audioFile.mimeType || response.headers['content-type'] || 'audio/mpeg';
+        const blob = new Blob([response.data], { type: mimeType });
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
         setLoading(false);
+
+        console.log(`Audio loaded: ${audioFile.name}, Type: ${mimeType}, Size: ${blob.size} bytes`);
 
       } catch (error) {
         console.error('Failed to load audio:', error);
         setLoading(false);
         if (onError) {
-          onError(`Audio file could not be loaded. Please try uploading again.`);
+          onError(`Audio file could not be loaded: ${error.response?.data?.message || error.message}`);
         }
       }
     };
@@ -130,12 +135,14 @@ const AudioPlayer = ({ audioFile, onError }) => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  return (
+    return (
     <div className="bg-gray-50 rounded-lg p-4 border">
       <audio
         ref={audioRef}
         src={audioUrl}
         preload="metadata"
+        crossOrigin="anonymous"
+        controls={false}
       />
       
       <div className="flex items-center space-x-4">
@@ -194,10 +201,11 @@ const AudioPlayer = ({ audioFile, onError }) => {
         </div>
       </div>
 
-      {/* Debug Info */}
+      {/* Status Info */}
       <div className="mt-2 text-xs text-gray-400">
         <div>Status: {loading ? 'Loading...' : !audioUrl ? 'No audio URL' : isPlaying ? 'Playing' : 'Ready'}</div>
-        {audioUrl && <div>Audio loaded: ✅</div>}
+        {audioUrl && <div>Audio loaded: ✅ ({audioFile.mimeType || 'audio/mpeg'})</div>}
+        {!audioUrl && !loading && <div>❌ Failed to load audio - check console for details</div>}
       </div>
     </div>
   );

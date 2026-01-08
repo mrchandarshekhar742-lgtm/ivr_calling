@@ -185,17 +185,37 @@ router.get('/:id/download', auth, async (req, res) => {
     // Increment usage count
     await audioFile.incrementUsage();
 
-    // Set headers for download
-    res.setHeader('Content-Disposition', `attachment; filename="${audioFile.originalName}"`);
+    // Set proper headers for audio streaming
     res.setHeader('Content-Type', audioFile.mimeType);
     res.setHeader('Content-Length', audioFile.size);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Range, Accept-Ranges, Authorization');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
 
-    // Send file data from database
-    res.send(audioFile.data);
+    // Handle range requests for audio streaming
+    const range = req.headers.range;
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : audioFile.size - 1;
+      const chunksize = (end - start) + 1;
+      
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${audioFile.size}`);
+      res.setHeader('Content-Length', chunksize);
+      
+      // Send partial content
+      const chunk = audioFile.data.slice(start, end + 1);
+      res.send(chunk);
+    } else {
+      // Send complete file
+      res.setHeader('Content-Disposition', `inline; filename="${audioFile.originalName}"`);
+      res.send(audioFile.data);
+    }
 
-    logger.info(`Audio file downloaded from database: ${audioFile.name} by ${req.user.email}`);
+    logger.info(`Audio file streamed from database: ${audioFile.name} by ${req.user.email}`);
   } catch (error) {
     logger.error('Download audio file error:', error);
     res.status(500).json({
