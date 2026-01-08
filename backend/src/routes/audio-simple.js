@@ -2,11 +2,9 @@ const express = require('express');
 const multer = require('multer');
 const auth = require('../middleware/auth');
 const logger = require('../config/logger');
+const AudioFile = require('../models/AudioFile');
 
 const router = express.Router();
-
-// In-memory storage for audio files (in production, use database)
-const audioFiles = new Map();
 
 // Configure multer for memory storage
 const storage = multer.memoryStorage();
@@ -34,23 +32,21 @@ const upload = multer({
 // @access  Private
 router.get('/', auth, async (req, res) => {
   try {
-    const userAudioFiles = Array.from(audioFiles.values())
-      .filter(file => file.uploadedBy === req.user.id)
-      .map(file => ({
-        ...file,
-        // Don't send the actual file data in list view
-        data: undefined
-      }));
+    const audioFiles = await AudioFile.findAll({
+      where: { uploadedBy: req.user.id },
+      attributes: { exclude: ['data'] }, // Don't send file data in list
+      order: [['createdAt', 'DESC']]
+    });
 
     res.json({
       success: true,
       data: {
-        audioFiles: userAudioFiles,
+        audioFiles: audioFiles,
         pagination: {
-          total: userAudioFiles.length,
+          total: audioFiles.length,
           page: 1,
           limit: 10,
-          pages: Math.ceil(userAudioFiles.length / 10)
+          pages: Math.ceil(audioFiles.length / 10)
         }
       }
     });
@@ -84,12 +80,11 @@ router.post('/', auth, upload.single('audio'), async (req, res) => {
       });
     }
 
-    // Create audio file record
-    const audioFile = {
-      id: Date.now(),
+    // Create audio file record in database
+    const audioFile = await AudioFile.create({
       name: name.trim(),
       originalName: req.file.originalname,
-      data: req.file.buffer, // Store file data
+      data: req.file.buffer, // Store file data as BLOB
       mimeType: req.file.mimetype,
       size: req.file.size,
       category,
@@ -97,20 +92,14 @@ router.post('/', auth, upload.single('audio'), async (req, res) => {
       tags: [],
       isPublic: Boolean(isPublic),
       uploadedBy: req.user.id,
-      userEmail: req.user.email,
-      usageCount: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+      usageCount: 0
+    });
 
-    // Store in memory
-    audioFiles.set(audioFile.id, audioFile);
-
-    logger.info(`Audio file uploaded: ${audioFile.name} by ${req.user.email}`);
+    logger.info(`Audio file uploaded to database: ${audioFile.name} by ${req.user.email}`);
 
     res.status(201).json({
       success: true,
-      message: 'Audio file uploaded successfully',
+      message: 'Audio file uploaded and saved to database successfully',
       data: {
         id: audioFile.id,
         name: audioFile.name,
@@ -139,7 +128,9 @@ router.post('/', auth, upload.single('audio'), async (req, res) => {
 // @access  Private
 router.get('/:id', auth, async (req, res) => {
   try {
-    const audioFile = audioFiles.get(parseInt(req.params.id));
+    const audioFile = await AudioFile.findByPk(req.params.id, {
+      attributes: { exclude: ['data'] } // Don't send file data in info request
+    });
     
     if (!audioFile) {
       return res.status(404).json({
@@ -158,10 +149,7 @@ router.get('/:id', auth, async (req, res) => {
 
     res.json({
       success: true,
-      data: {
-        ...audioFile,
-        data: undefined // Don't send file data in info request
-      }
+      data: audioFile
     });
   } catch (error) {
     logger.error('Get audio file error:', error);
@@ -177,7 +165,7 @@ router.get('/:id', auth, async (req, res) => {
 // @access  Private
 router.get('/:id/download', auth, async (req, res) => {
   try {
-    const audioFile = audioFiles.get(parseInt(req.params.id));
+    const audioFile = await AudioFile.findByPk(req.params.id);
     
     if (!audioFile) {
       return res.status(404).json({
@@ -195,8 +183,7 @@ router.get('/:id/download', auth, async (req, res) => {
     }
 
     // Increment usage count
-    audioFile.usageCount = (audioFile.usageCount || 0) + 1;
-    audioFiles.set(audioFile.id, audioFile);
+    await audioFile.incrementUsage();
 
     // Set headers for download
     res.setHeader('Content-Disposition', `attachment; filename="${audioFile.originalName}"`);
@@ -205,10 +192,10 @@ router.get('/:id/download', auth, async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Range, Accept-Ranges, Authorization');
 
-    // Send file data
+    // Send file data from database
     res.send(audioFile.data);
 
-    logger.info(`Audio file downloaded: ${audioFile.name} by ${req.user.email}`);
+    logger.info(`Audio file downloaded from database: ${audioFile.name} by ${req.user.email}`);
   } catch (error) {
     logger.error('Download audio file error:', error);
     res.status(500).json({
@@ -223,7 +210,7 @@ router.get('/:id/download', auth, async (req, res) => {
 // @access  Private
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const audioFile = audioFiles.get(parseInt(req.params.id));
+    const audioFile = await AudioFile.findByPk(req.params.id);
     
     if (!audioFile) {
       return res.status(404).json({
@@ -240,10 +227,10 @@ router.delete('/:id', auth, async (req, res) => {
       });
     }
 
-    // Delete from memory
-    audioFiles.delete(parseInt(req.params.id));
+    // Delete from database
+    await audioFile.destroy();
 
-    logger.info(`Audio file deleted: ${audioFile.name} by ${req.user.email}`);
+    logger.info(`Audio file deleted from database: ${audioFile.name} by ${req.user.email}`);
 
     res.json({
       success: true,

@@ -3,11 +3,9 @@ const { body, validationResult } = require('express-validator');
 const auth = require('../middleware/auth');
 const logger = require('../config/logger');
 const crypto = require('crypto');
+const Device = require('../models/Device');
 
 const router = express.Router();
-
-// In-memory device storage (in production, use database)
-const devices = new Map();
 
 // Generate device token
 const generateDeviceToken = (deviceId, userId) => {
@@ -22,18 +20,21 @@ const generateDeviceToken = (deviceId, userId) => {
 // @access  Private
 router.get('/', auth, async (req, res) => {
   try {
-    const userDevices = Array.from(devices.values())
-      .filter(device => device.userId === req.user.id)
-      .map(device => ({
-        ...device,
-        // Don't expose full token in list
-        tokenPreview: device.token ? `${device.token.substring(0, 8)}...` : null
-      }));
+    const userDevices = await Device.findAll({
+      where: { userId: req.user.id },
+      order: [['lastSeen', 'DESC']]
+    });
+
+    const devicesWithTokenPreview = userDevices.map(device => ({
+      ...device.toJSON(),
+      // Don't expose full token in list
+      tokenPreview: device.token ? `${device.token.substring(0, 8)}...` : null
+    }));
 
     res.json({
       success: true,
       data: {
-        devices: userDevices,
+        devices: devicesWithTokenPreview,
         total: userDevices.length
       }
     });
@@ -51,9 +52,14 @@ router.get('/', auth, async (req, res) => {
 // @access  Private
 router.get('/:deviceId', auth, async (req, res) => {
   try {
-    const device = devices.get(req.params.deviceId);
+    const device = await Device.findOne({
+      where: { 
+        deviceId: req.params.deviceId,
+        userId: req.user.id 
+      }
+    });
     
-    if (!device || device.userId !== req.user.id) {
+    if (!device) {
       return res.status(404).json({
         success: false,
         message: 'Device not found'
@@ -96,18 +102,79 @@ router.post('/register', auth, [
     const { deviceId, deviceName, androidVersion, deviceModel, appVersion } = req.body;
 
     // Check if device already exists
-    if (devices.has(deviceId)) {
-      const existingDevice = devices.get(deviceId);
+    let existingDevice = await Device.findOne({ where: { deviceId } });
+    
+    if (existingDevice) {
       if (existingDevice.userId !== req.user.id) {
-        // Allow re-registration by different user - remove old registration
+        // Allow re-registration by different user - update ownership
         logger.info(`Device ${deviceId} re-registered by different user: ${req.user.email} (was: ${existingDevice.userEmail})`);
+        
+        // Update existing device with new user
+        existingDevice.userId = req.user.id;
+        existingDevice.userEmail = req.user.email;
+        existingDevice.deviceName = deviceName;
+        existingDevice.androidVersion = androidVersion || 'Unknown';
+        existingDevice.deviceModel = deviceModel || 'Android Device';
+        existingDevice.appVersion = appVersion || '1.0.0';
+        existingDevice.status = 'online';
+        existingDevice.token = generateDeviceToken(deviceId, req.user.id);
+        existingDevice.lastSeen = new Date();
+        
+        await existingDevice.save();
+        
+        const deviceData = existingDevice.toJSON();
+        
+        logger.info(`Device re-registered in database: ${deviceName} (${deviceId}) by ${req.user.email}`);
+
+        return res.json({
+          success: true,
+          message: 'Device re-registered successfully',
+          data: {
+            ...deviceData,
+            instructions: {
+              serverUrl: 'https://ivr.wxon.in',
+              apiEndpoint: 'https://ivr.wxon.in/api',
+              socketUrl: 'https://ivr.wxon.in',
+              token: deviceData.token
+            }
+          }
+        });
+      } else {
+        // Same user re-registering - update device info and set online
+        existingDevice.deviceName = deviceName;
+        existingDevice.androidVersion = androidVersion || existingDevice.androidVersion;
+        existingDevice.deviceModel = deviceModel || existingDevice.deviceModel;
+        existingDevice.appVersion = appVersion || existingDevice.appVersion;
+        existingDevice.status = 'online';
+        existingDevice.lastSeen = new Date();
+        
+        await existingDevice.save();
+        
+        const deviceData = existingDevice.toJSON();
+        
+        logger.info(`Device updated in database: ${deviceName} (${deviceId}) by ${req.user.email}`);
+
+        return res.json({
+          success: true,
+          message: 'Device updated and set online successfully',
+          data: {
+            ...deviceData,
+            instructions: {
+              serverUrl: 'https://ivr.wxon.in',
+              apiEndpoint: 'https://ivr.wxon.in/api',
+              socketUrl: 'https://ivr.wxon.in',
+              token: deviceData.token
+            }
+          }
+        });
       }
     }
 
     // Generate device token
     const deviceToken = generateDeviceToken(deviceId, req.user.id);
 
-    const deviceData = {
+    // Create new device
+    const deviceData = await Device.create({
       deviceId,
       deviceName,
       androidVersion: androidVersion || 'Unknown',
@@ -117,8 +184,7 @@ router.post('/register', auth, [
       userEmail: req.user.email,
       status: 'online', // Automatically set to online on registration
       token: deviceToken,
-      registeredAt: new Date().toISOString(),
-      lastSeen: new Date().toISOString(),
+      lastSeen: new Date(),
       capabilities: ['voice_call', 'dtmf_input'],
       stats: {
         totalCalls: 0,
@@ -126,18 +192,15 @@ router.post('/register', auth, [
         failedCalls: 0,
         lastCallAt: null
       }
-    };
+    });
 
-    // Store device
-    devices.set(deviceId, deviceData);
-
-    logger.info(`Device registered: ${deviceName} (${deviceId}) by ${req.user.email}`);
+    logger.info(`Device registered in database: ${deviceName} (${deviceId}) by ${req.user.email}`);
 
     res.json({
       success: true,
-      message: 'Device registered successfully',
+      message: 'Device registered successfully in database',
       data: {
-        ...deviceData,
+        ...deviceData.toJSON(),
         instructions: {
           serverUrl: 'https://ivr.wxon.in',
           apiEndpoint: 'https://ivr.wxon.in/api',
@@ -171,24 +234,28 @@ router.put('/:deviceId/status', auth, [
       });
     }
 
-    const device = devices.get(req.params.deviceId);
+    const device = await Device.findOne({
+      where: { 
+        deviceId: req.params.deviceId,
+        userId: req.user.id 
+      }
+    });
     
-    if (!device || device.userId !== req.user.id) {
+    if (!device) {
       return res.status(404).json({
         success: false,
         message: 'Device not found'
       });
     }
 
-    device.status = req.body.status;
-    device.lastSeen = new Date().toISOString();
-    devices.set(req.params.deviceId, device);
+    // Update device status
+    await device.updateStatus(req.body.status);
 
-    logger.info(`Device status updated: ${device.deviceName} -> ${req.body.status}`);
+    logger.info(`Device status updated in database: ${device.deviceName} -> ${req.body.status}`);
 
     res.json({
       success: true,
-      message: 'Device status updated',
+      message: 'Device status updated in database',
       data: device
     });
   } catch (error) {
@@ -205,22 +272,28 @@ router.put('/:deviceId/status', auth, [
 // @access  Private
 router.delete('/:deviceId', auth, async (req, res) => {
   try {
-    const device = devices.get(req.params.deviceId);
+    const device = await Device.findOne({
+      where: { 
+        deviceId: req.params.deviceId,
+        userId: req.user.id 
+      }
+    });
     
-    if (!device || device.userId !== req.user.id) {
+    if (!device) {
       return res.status(404).json({
         success: false,
         message: 'Device not found'
       });
     }
 
-    devices.delete(req.params.deviceId);
+    const deviceName = device.deviceName;
+    await device.destroy();
 
-    logger.info(`Device removed: ${device.deviceName} (${req.params.deviceId}) by ${req.user.email}`);
+    logger.info(`Device removed from database: ${deviceName} (${req.params.deviceId}) by ${req.user.email}`);
 
     res.json({
       success: true,
-      message: 'Device removed successfully'
+      message: 'Device removed successfully from database'
     });
   } catch (error) {
     logger.error('Remove device error:', error);
@@ -236,9 +309,14 @@ router.delete('/:deviceId', auth, async (req, res) => {
 // @access  Private
 router.post('/:deviceId/test', auth, async (req, res) => {
   try {
-    const device = devices.get(req.params.deviceId);
+    const device = await Device.findOne({
+      where: { 
+        deviceId: req.params.deviceId,
+        userId: req.user.id 
+      }
+    });
     
-    if (!device || device.userId !== req.user.id) {
+    if (!device) {
       return res.status(404).json({
         success: false,
         message: 'Device not found'
@@ -246,8 +324,8 @@ router.post('/:deviceId/test', auth, async (req, res) => {
     }
 
     // Update last seen
-    device.lastSeen = new Date().toISOString();
-    devices.set(req.params.deviceId, device);
+    device.lastSeen = new Date();
+    await device.save();
 
     // In real implementation, you would send a test signal to the device
     logger.info(`Device test initiated: ${device.deviceName} (${req.params.deviceId})`);
@@ -276,17 +354,18 @@ router.post('/:deviceId/test', auth, async (req, res) => {
 // @access  Private
 router.get('/stats/summary', auth, async (req, res) => {
   try {
-    const userDevices = Array.from(devices.values())
-      .filter(device => device.userId === req.user.id);
+    const userDevices = await Device.findAll({
+      where: { userId: req.user.id }
+    });
 
     const stats = {
       totalDevices: userDevices.length,
       onlineDevices: userDevices.filter(d => d.status === 'online').length,
       offlineDevices: userDevices.filter(d => d.status === 'offline').length,
       busyDevices: userDevices.filter(d => d.status === 'busy').length,
-      totalCalls: userDevices.reduce((sum, d) => sum + d.stats.totalCalls, 0),
-      successfulCalls: userDevices.reduce((sum, d) => sum + d.stats.successfulCalls, 0),
-      failedCalls: userDevices.reduce((sum, d) => sum + d.stats.failedCalls, 0)
+      totalCalls: userDevices.reduce((sum, d) => sum + (d.stats?.totalCalls || 0), 0),
+      successfulCalls: userDevices.reduce((sum, d) => sum + (d.stats?.successfulCalls || 0), 0),
+      failedCalls: userDevices.reduce((sum, d) => sum + (d.stats?.failedCalls || 0), 0)
     };
 
     res.json({

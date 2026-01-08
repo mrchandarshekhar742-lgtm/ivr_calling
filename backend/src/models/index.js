@@ -5,6 +5,7 @@ const AudioFile = require('./AudioFile');
 const CallLog = require('./CallLog');
 const CallTemplate = require('./CallTemplate');
 const CallSchedule = require('./CallSchedule');
+const Device = require('./Device');
 
 // Define associations
 User.hasMany(Campaign, { foreignKey: 'createdBy', as: 'campaigns' });
@@ -15,6 +16,9 @@ Contact.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
 
 User.hasMany(AudioFile, { foreignKey: 'uploadedBy', as: 'audioFiles' });
 AudioFile.belongsTo(User, { foreignKey: 'uploadedBy', as: 'uploader' });
+
+User.hasMany(Device, { foreignKey: 'userId', as: 'devices' });
+Device.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 Campaign.hasMany(Contact, { foreignKey: 'campaignId', as: 'contacts' });
 Contact.belongsTo(Campaign, { foreignKey: 'campaignId', as: 'campaign' });
@@ -49,5 +53,6 @@ module.exports = {
   AudioFile,
   CallLog,
   CallTemplate,
-  CallSchedule
+  CallSchedule,
+  Device
 };
