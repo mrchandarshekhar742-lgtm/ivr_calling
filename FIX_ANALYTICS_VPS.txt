@@ -1,0 +1,2 @@
+cat /var/www/ivr-platform/ivr_calling/backend/src/routes/analytics.js | head -200 | tail -10
+sed -n '190,200p' /var/www/ivr-platform/ivr_calling/backend/src/routes/analytics.js

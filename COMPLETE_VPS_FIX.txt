@@ -1,0 +1,10 @@
+cd /var/www/ivr-platform/ivr_calling/backend
+pm2 delete ivr-backend-8090 2>/dev/null || true
+rm -f database.sqlite
+node -e "const { sequelize } = require('./src/config/database'); const models = require('./src/models'); sequelize.sync({ force: true }).then(() => { console.log('Database synced'); process.exit(0); }).catch(err => { console.error(err); process.exit(1); });"
+pm2 start server.js --name "ivr-backend-8090" --env production
+pm2 save
+sleep 3
+curl -X POST https://ivr.wxon.in/api/auth/register -H "Content-Type: application/json" -d '{"name":"Test User","email":"test@test.com","password":"test123"}'
+curl https://ivr.wxon.in/api/analytics/dashboard
+pm2 logs ivr-backend-8090 --lines 10 --nostream

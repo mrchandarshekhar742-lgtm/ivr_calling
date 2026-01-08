@@ -1,0 +1,1 @@
+pm2 logs ivr-backend-8090 --lines 50 --nostream | grep -A 5 -B 5 "error\|Error\|500"
