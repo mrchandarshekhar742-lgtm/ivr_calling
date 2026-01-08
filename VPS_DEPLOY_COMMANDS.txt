@@ -1,13 +1,4 @@
-cd /var/www/ivr-platform/ivr_calling
-git pull origin main
-cd backend
-pm2 delete ivr-backend-8090 2>/dev/null || true
-npm install --production
-pm2 start server.js --name "ivr-backend-8090" --env production
-pm2 save
-cd ../frontend
-npm install
-npm run build
-pm2 status
-curl https://ivr.wxon.in/health
-pm2 logs ivr-backend-8090 --lines 10 --nostream
+git add .
+git commit -m "Fix analytics.js syntax error and all backend issues"
+git push origin main
+ssh root@66.116.196.226 "cd /var/www/ivr-platform/ivr_calling && git pull origin main && cd backend && pm2 delete ivr-backend-8090 2>/dev/null || true && npm install --production && pm2 start server.js --name 'ivr-backend-8090' --env production && pm2 save && cd ../frontend && npm install && npm run build && pm2 status && curl https://ivr.wxon.in/health && pm2 logs ivr-backend-8090 --lines 10 --nostream"
