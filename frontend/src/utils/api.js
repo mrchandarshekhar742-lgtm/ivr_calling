@@ -34,11 +34,17 @@ api.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response;
       
+      // Mark auth errors to prevent React Query retries
+      if (status === 401 || status === 403) {
+        error.isAuthError = true;
+      }
+      
       switch (status) {
         case 401:
-          // Unauthorized - redirect to login
+          // Unauthorized - redirect to login (only show toast if not on login page)
           localStorage.removeItem('token');
           if (window.location.pathname !== '/login') {
+            toast.error('Session expired. Please login again.');
             window.location.href = '/login';
           }
           break;
@@ -48,7 +54,7 @@ api.interceptors.response.use(
           break;
           
         case 404:
-          toast.error('Resource not found.');
+          // Don't show toast for 404s, let components handle them
           break;
           
         case 422:
@@ -71,7 +77,9 @@ api.interceptors.response.use(
           break;
           
         default:
-          toast.error(data.message || 'An error occurred');
+          if (status >= 400) {
+            toast.error(data.message || 'An error occurred');
+          }
       }
     } else if (error.request) {
       // Network error

@@ -13,17 +13,44 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: (failureCount, error) => {
-        // Don't retry on 401, 403, 404 errors
-        if (error?.response?.status === 401 || 
-            error?.response?.status === 403 || 
-            error?.response?.status === 404) {
+        // Never retry auth errors (401, 403)
+        if (error?.isAuthError || 
+            error?.response?.status === 401 || 
+            error?.response?.status === 403) {
           return false;
         }
-        // Retry other errors up to 1 time
-        return failureCount < 1;
+        // Never retry client errors (4xx)
+        if (error?.response?.status >= 400 && error?.response?.status < 500) {
+          return false;
+        }
+        // Retry server errors (5xx) only once
+        if (error?.response?.status >= 500) {
+          return failureCount < 1;
+        }
+        // Retry network errors up to 2 times
+        if (!error?.response) {
+          return failureCount < 2;
+        }
+        return false;
       },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
       staleTime: 5 * 60 * 1000, // 5 minutes
     },
+    mutations: {
+      retry: (failureCount, error) => {
+        // Never retry mutations on auth errors
+        if (error?.isAuthError || 
+            error?.response?.status === 401 || 
+            error?.response?.status === 403) {
+          return false;
+        }
+        // Never retry client errors for mutations
+        if (error?.response?.status >= 400 && error?.response?.status < 500) {
+          return false;
+        }
+        return false; // Generally don't retry mutations
+      }
+    }
   },
 });
 
