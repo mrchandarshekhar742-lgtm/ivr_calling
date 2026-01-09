@@ -6,100 +6,84 @@ const AudioPlayer = ({ audioFile, onError }) => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [audioUrl, setAudioUrl] = useState(null);
+  const [audioBlob, setAudioBlob] = useState(null);
   const audioRef = useRef(null);
 
-  // Create authenticated audio URL using temporary token
+  // Load audio file as blob with authentication
   useEffect(() => {
-    const createAudioUrl = async () => {
+    const loadAudio = async () => {
       try {
         setLoading(true);
-        const token = localStorage.getItem('token');
-        if (!token) {
-          throw new Error('No authentication token found');
-        }
-
-        // Direct approach: Get audio as blob with proper headers
+        
         const response = await api.get(`/api/audio/${audioFile.id}/download`, {
-          responseType: 'blob',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'audio/*',
-            'Cache-Control': 'no-cache'
-          }
+          responseType: 'blob'
         });
 
-        // Create object URL from blob with proper MIME type
-        const mimeType = audioFile.mimeType || response.headers['content-type'] || 'audio/mpeg';
-        const blob = new Blob([response.data], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        setAudioUrl(url);
+        const blob = new Blob([response.data], { 
+          type: audioFile.mimeType || 'audio/mpeg' 
+        });
+        
+        setAudioBlob(blob);
         setLoading(false);
 
-        console.log(`Audio loaded: ${audioFile.name}, Type: ${mimeType}, Size: ${blob.size} bytes`);
+        console.log(`Audio loaded: ${audioFile.name}, Size: ${blob.size} bytes`);
 
       } catch (error) {
         console.error('Failed to load audio:', error);
         setLoading(false);
         if (onError) {
-          onError(`Audio file could not be loaded: ${error.response?.data?.message || error.message}`);
+          onError(`Failed to load audio: ${error.response?.data?.message || error.message}`);
         }
       }
     };
 
-    createAudioUrl();
-
-    // Cleanup function to revoke object URL
-    return () => {
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
-    };
+    loadAudio();
   }, [audioFile.id, audioFile.name, audioFile.mimeType, onError]);
+
+  // Create object URL when blob is available
+  useEffect(() => {
+    if (!audioBlob || !audioRef.current) return;
+
+    const objectUrl = URL.createObjectURL(audioBlob);
+    audioRef.current.src = objectUrl;
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [audioBlob]);
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !audioUrl) return;
+    if (!audio) return;
 
     const updateTime = () => setCurrentTime(audio.currentTime);
     const updateDuration = () => setDuration(audio.duration);
     const handleEnded = () => setIsPlaying(false);
-    const handleLoadStart = () => setLoading(true);
-    const handleCanPlay = () => setLoading(false);
     const handleError = (e) => {
-      console.error('Audio playback error:', {
-        error: e,
-        audioFile: audioFile.name,
-        readyState: audio.readyState,
-        networkState: audio.networkState
-      });
+      console.error('Audio playback error:', e);
       setLoading(false);
       setIsPlaying(false);
       if (onError) {
-        onError(`Failed to play audio: ${audioFile.name}. The audio file may be corrupted or in an unsupported format.`);
+        onError(`Failed to play audio: ${audioFile.name}`);
       }
     };
 
     audio.addEventListener('timeupdate', updateTime);
     audio.addEventListener('loadedmetadata', updateDuration);
     audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('loadstart', handleLoadStart);
-    audio.addEventListener('canplay', handleCanPlay);
     audio.addEventListener('error', handleError);
 
     return () => {
       audio.removeEventListener('timeupdate', updateTime);
       audio.removeEventListener('loadedmetadata', updateDuration);
       audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('loadstart', handleLoadStart);
-      audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
     };
-  }, [audioFile.name, onError, audioUrl]);
+  }, [audioFile.name, onError]);
 
   const togglePlay = async () => {
     const audio = audioRef.current;
-    if (!audio || !audioUrl) return;
+    if (!audio || !audioBlob) return;
 
     try {
       if (isPlaying) {
@@ -139,9 +123,7 @@ const AudioPlayer = ({ audioFile, onError }) => {
     <div className="bg-gray-50 rounded-lg p-4 border">
       <audio
         ref={audioRef}
-        src={audioUrl}
         preload="metadata"
-        crossOrigin="anonymous"
         controls={false}
       />
       
@@ -149,16 +131,16 @@ const AudioPlayer = ({ audioFile, onError }) => {
         {/* Play/Pause Button */}
         <button
           onClick={togglePlay}
-          disabled={loading || !audioUrl}
+          disabled={loading || !audioBlob}
           className={`flex items-center justify-center w-10 h-10 rounded-full ${
-            loading || !audioUrl
+            loading || !audioBlob
               ? 'bg-gray-300 cursor-not-allowed' 
               : isPlaying 
                 ? 'bg-red-500 hover:bg-red-600' 
                 : 'bg-green-500 hover:bg-green-600'
           } text-white transition-colors`}
         >
-          {loading || !audioUrl ? (
+          {loading || !audioBlob ? (
             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : isPlaying ? (
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -203,9 +185,9 @@ const AudioPlayer = ({ audioFile, onError }) => {
 
       {/* Status Info */}
       <div className="mt-2 text-xs text-gray-400">
-        <div>Status: {loading ? 'Loading...' : !audioUrl ? 'No audio URL' : isPlaying ? 'Playing' : 'Ready'}</div>
-        {audioUrl && <div>Audio loaded: ✅ ({audioFile.mimeType || 'audio/mpeg'})</div>}
-        {!audioUrl && !loading && <div>❌ Failed to load audio - check console for details</div>}
+        <div>Status: {loading ? 'Loading...' : !audioBlob ? 'No audio loaded' : isPlaying ? 'Playing' : 'Ready'}</div>
+        {audioBlob && <div>Audio loaded: ✅ ({audioFile.mimeType || 'audio/mpeg'})</div>}
+        {!audioBlob && !loading && <div>❌ Failed to load audio - check console for details</div>}
       </div>
     </div>
   );

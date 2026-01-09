@@ -161,7 +161,7 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // @route   GET /api/audio/:id/download
-// @desc    Download audio file
+// @desc    Download audio file with proper range support
 // @access  Private
 router.get('/:id/download', auth, async (req, res) => {
   try {
@@ -185,9 +185,11 @@ router.get('/:id/download', auth, async (req, res) => {
     // Increment usage count
     await audioFile.incrementUsage();
 
-    // Set proper headers for audio streaming
+    const fileSize = audioFile.size;
+    const fileData = audioFile.data;
+
+    // Set basic headers
     res.setHeader('Content-Type', audioFile.mimeType);
-    res.setHeader('Content-Length', audioFile.size);
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -198,30 +200,33 @@ router.get('/:id/download', auth, async (req, res) => {
     const range = req.headers.range;
     if (range) {
       const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : audioFile.size - 1;
-      const chunksize = (end - start) + 1;
+      const start = parseInt(parts[0], 10) || 0;
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
       
-      if (isNaN(start) || start < 0 || start >= audioFile.size || isNaN(end) || end < start) {
+      // Validate range
+      if (start >= fileSize || end >= fileSize || start > end) {
         res.status(416);
-        res.setHeader('Content-Range', `bytes */${audioFile.size}`);
+        res.setHeader('Content-Range', `bytes */${fileSize}`);
         return res.end();
       }
       
+      const chunksize = (end - start) + 1;
+      
       res.status(206);
-      res.setHeader('Content-Range', `bytes ${start}-${end}/${audioFile.size}`);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
       res.setHeader('Content-Length', chunksize);
       
       // Send partial content
-      const chunk = audioFile.data.slice(start, end + 1);
-      res.send(chunk);
+      const chunk = fileData.subarray(start, end + 1);
+      res.end(chunk);
     } else {
       // Send complete file
+      res.setHeader('Content-Length', fileSize);
       res.setHeader('Content-Disposition', `inline; filename="${audioFile.originalName}"`);
-      res.send(audioFile.data);
+      res.end(fileData);
     }
 
-    logger.info(`Audio file streamed from database: ${audioFile.name} by ${req.user.email}`);
+    logger.info(`Audio file streamed: ${audioFile.name} by ${req.user.email}`);
   } catch (error) {
     logger.error('Download audio file error:', error);
     res.status(500).json({

@@ -11,7 +11,7 @@ const CreateCampaign = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    type: 'broadcast',
+    type: 'bulk',
     audioFileId: '',
     settings: {
       maxRetries: 3,
@@ -153,10 +153,9 @@ const CreateCampaign = () => {
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="broadcast">Broadcast</option>
-              <option value="survey">Survey</option>
-              <option value="notification">Notification</option>
-              <option value="reminder">Reminder</option>
+              <option value="bulk">Bulk Campaign</option>
+              <option value="scheduled">Scheduled Campaign</option>
+              <option value="triggered">Triggered Campaign</option>
             </select>
           </div>
 
