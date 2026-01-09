@@ -3,7 +3,7 @@ const { body, validationResult } = require('express-validator');
 const auth = require('../middleware/auth');
 const logger = require('../config/logger');
 const crypto = require('crypto');
-const Device = require('../models/Device');
+const { Device } = require('../models');
 
 const router = express.Router();
 

@@ -1,3 +1,30 @@
+# 🚀 Complete Backend Fix - VPS Commands
+# This fixes the model import issues causing 500 errors
+
+# ==========================================
+# STEP 1: Connect to VPS
+# ==========================================
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226
+
+# ==========================================
+# STEP 2: Navigate to Backend Directory
+# ==========================================
+cd /var/www/ivr-platform/ivr_calling/backend/src/routes
+
+# ==========================================
+# STEP 3: Backup Current Files
+# ==========================================
+cp analytics.js analytics.js.backup
+cp devices.js devices.js.backup
+cp callLogs.js callLogs.js.backup
+cp campaigns.js campaigns.js.backup
+cp schedules.js schedules.js.backup
+echo "✅ Backup created"
+
+# ==========================================
+# STEP 4: Fix analytics.js
+# ==========================================
+cat > analytics.js << 'EOF'
 const express = require('express');
 const auth = require('../middleware/auth');
 const logger = require('../config/logger');
@@ -241,3 +268,80 @@ router.get('/', auth, async (req, res) => {
 });
 
 module.exports = router;
+EOF
+
+echo "✅ analytics.js fixed"
+
+# ==========================================
+# STEP 5: Fix devices.js
+# ==========================================
+sed -i 's/const Device = require.*Device.*);/const { Device } = require("..\/models");/' devices.js
+echo "✅ devices.js fixed"
+
+# ==========================================
+# STEP 6: Fix callLogs.js
+# ==========================================
+sed -i 's/const CallLog = require.*CallLog.*);/const { CallLog, Campaign, Contact } = require("..\/models");/' callLogs.js
+sed -i 's/const Campaign = require.*Campaign.*);//' callLogs.js
+sed -i 's/const Contact = require.*Contact.*);//' callLogs.js
+echo "✅ callLogs.js fixed"
+
+# ==========================================
+# STEP 7: Fix campaigns.js
+# ==========================================
+sed -i 's/const Campaign = require.*Campaign.*);/const { Campaign, AudioFile } = require("..\/models");/' campaigns.js
+sed -i 's/const AudioFile = require.*AudioFile.*);//' campaigns.js
+echo "✅ campaigns.js fixed"
+
+# ==========================================
+# STEP 8: Fix schedules.js
+# ==========================================
+sed -i 's/const CallSchedule = require.*CallSchedule.*);/const { CallSchedule, Campaign } = require("..\/models");/' schedules.js
+sed -i 's/const Campaign = require.*Campaign.*);//' schedules.js
+echo "✅ schedules.js fixed"
+
+# ==========================================
+# STEP 9: Restart Backend
+# ==========================================
+cd /var/www/ivr-platform/ivr_calling/backend
+pm2 restart ivr-backend-8090
+pm2 save
+
+echo "🔄 Backend restarted"
+
+# ==========================================
+# STEP 10: Test APIs
+# ==========================================
+sleep 5
+
+echo "🧪 Testing APIs..."
+
+echo "Testing devices API:"
+curl -s -o /dev/null -w "Status: %{http_code}\n" https://ivr.wxon.in/api/devices
+
+echo "Testing call-logs API:"
+curl -s -o /dev/null -w "Status: %{http_code}\n" https://ivr.wxon.in/api/call-logs
+
+echo "Testing analytics API:"
+curl -s -o /dev/null -w "Status: %{http_code}\n" https://ivr.wxon.in/api/analytics/dashboard
+
+# ==========================================
+# STEP 11: Check Backend Logs
+# ==========================================
+echo "📋 Recent backend logs:"
+pm2 logs ivr-backend-8090 --lines 10 --nostream
+
+echo ""
+echo "✅ BACKEND FIXES COMPLETED!"
+echo ""
+echo "🧪 VERIFICATION:"
+echo "1. All APIs should now return 401 (not 500)"
+echo "2. Check browser console - no more 500 errors"
+echo "3. Login should work properly"
+echo ""
+echo "🔧 If still issues, check:"
+echo "   pm2 logs ivr-backend-8090"
+echo "   pm2 status"
+EOF
+
+echo "✅ Complete backend fix commands ready"

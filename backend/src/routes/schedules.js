@@ -1,8 +1,7 @@
 const express = require('express');
 const auth = require('../middleware/auth');
 const logger = require('../config/logger');
-const CallSchedule = require('../models/CallSchedule');
-const Campaign = require('../models/Campaign');
+const { CallSchedule, Campaign } = require('../models');
 
 const router = express.Router();
 

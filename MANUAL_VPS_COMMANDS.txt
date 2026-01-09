@@ -1,0 +1,427 @@
+# 🚀 Manual VPS Commands - Complete Auth Fix Deployment
+
+# ==========================================
+# STEP 1: Connect to VPS
+# ==========================================
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226
+
+# ==========================================
+# STEP 2: Backup Current Files (Optional)
+# ==========================================
+cd /var/www/ivr-platform/ivr_calling/frontend/src
+cp utils/api.js utils/api.js.backup
+cp index.jsx index.jsx.backup
+echo "✅ Backup created"
+
+# ==========================================
+# STEP 3: Update api.js File
+# ==========================================
+cat > utils/api.js << 'EOF'
+import axios from 'axios';
+import { toast } from 'react-hot-toast';
+
+// Create axios instance
+const api = axios.create({
+  baseURL: 'https://ivr.wxon.in',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor to add auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor to handle errors
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    // Handle common errors
+    if (error.response) {
+      const { status, data } = error.response;
+      
+      // Mark auth errors to prevent React Query retries
+      if (status === 401 || status === 403) {
+        error.isAuthError = true;
+      }
+      
+      switch (status) {
+        case 401:
+          // Unauthorized - redirect to login (only show toast if not on login page)
+          localStorage.removeItem('token');
+          if (window.location.pathname !== '/login') {
+            toast.error('Session expired. Please login again.');
+            window.location.href = '/login';
+          }
+          break;
+          
+        case 403:
+          toast.error('Access denied. You don\'t have permission to perform this action.');
+          break;
+          
+        case 404:
+          // Don't show toast for 404s, let components handle them
+          break;
+          
+        case 422:
+          // Validation errors
+          if (data.errors) {
+            Object.values(data.errors).forEach(error => {
+              toast.error(error[0]);
+            });
+          } else {
+            toast.error(data.message || 'Validation error');
+          }
+          break;
+          
+        case 429:
+          toast.error('Too many requests. Please try again later.');
+          break;
+          
+        case 500:
+          toast.error('Server error. Please try again later.');
+          break;
+          
+        default:
+          if (status >= 400) {
+            toast.error(data.message || 'An error occurred');
+          }
+      }
+    } else if (error.request) {
+      // Network error
+      toast.error('Network error. Please check your connection.');
+    } else {
+      // Other error
+      toast.error('An unexpected error occurred.');
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+EOF
+
+echo "✅ api.js updated"
+
+# ==========================================
+# STEP 4: Update index.jsx File
+# ==========================================
+cat > index.jsx << 'EOF'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from './hooks/useAuth.jsx';
+import './index.css';
+import App from './App.jsx';
+
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        // Never retry auth errors (401, 403)
+        if (error?.isAuthError || 
+            error?.response?.status === 401 || 
+            error?.response?.status === 403) {
+          return false;
+        }
+        // Never retry client errors (4xx)
+        if (error?.response?.status >= 400 && error?.response?.status < 500) {
+          return false;
+        }
+        // Retry server errors (5xx) only once
+        if (error?.response?.status >= 500) {
+          return failureCount < 1;
+        }
+        // Retry network errors up to 2 times
+        if (!error?.response) {
+          return failureCount < 2;
+        }
+        return false;
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+    mutations: {
+      retry: (failureCount, error) => {
+        // Never retry mutations on auth errors
+        if (error?.isAuthError || 
+            error?.response?.status === 401 || 
+            error?.response?.status === 403) {
+          return false;
+        }
+        // Never retry client errors for mutations
+        if (error?.response?.status >= 400 && error?.response?.status < 500) {
+          return false;
+        }
+        return false; // Generally don't retry mutations
+      }
+    }
+  },
+});
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true
+        }}
+      >
+        <AuthProvider>
+          <App />
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#363636',
+                color: '#fff',
+              },
+              success: {
+                duration: 3000,
+                iconTheme: {
+                  primary: '#4ade80',
+                  secondary: '#fff',
+                },
+              },
+              error: {
+                duration: 5000,
+                iconTheme: {
+                  primary: '#ef4444',
+                  secondary: '#fff',
+                },
+              },
+            }}
+          />
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
+  </React.StrictMode>
+);
+EOF
+
+echo "✅ index.jsx updated"
+
+# ==========================================
+# STEP 5: Create API Tester Utility
+# ==========================================
+cat > utils/apiTester.js << 'EOF'
+/**
+ * API Testing Utility for Production Debugging
+ * Use this to safely test APIs with proper authentication
+ */
+
+import api from './api.js';
+
+class APITester {
+  constructor() {
+    this.baseURL = 'https://ivr.wxon.in';
+  }
+
+  /**
+   * Test authentication flow
+   */
+  async testAuth(email = 'test@example.com', password = 'password') {
+    console.group('🔐 Authentication Test');
+    
+    try {
+      // Test login
+      console.log('Testing login...');
+      const loginResponse = await api.post('/api/auth/login', { email, password });
+      console.log('✅ Login successful:', loginResponse.data);
+      
+      // Test protected route
+      console.log('Testing protected route...');
+      const meResponse = await api.get('/api/auth/me');
+      console.log('✅ Protected route works:', meResponse.data);
+      
+      return { success: true, token: loginResponse.data.data.token };
+    } catch (error) {
+      console.error('❌ Auth test failed:', error.response?.data || error.message);
+      return { success: false, error: error.response?.data || error.message };
+    } finally {
+      console.groupEnd();
+    }
+  }
+
+  /**
+   * Test all major endpoints
+   */
+  async testAllEndpoints() {
+    console.group('🧪 Complete API Test Suite');
+    
+    const endpoints = [
+      { method: 'GET', url: '/api/auth/me', name: 'User Profile' },
+      { method: 'GET', url: '/api/devices', name: 'Devices List' },
+      { method: 'GET', url: '/api/contacts', name: 'Contacts List' },
+      { method: 'GET', url: '/api/campaigns', name: 'Campaigns List' },
+      { method: 'GET', url: '/api/call-logs', name: 'Call Logs' },
+      { method: 'GET', url: '/api/analytics/dashboard', name: 'Analytics Dashboard' },
+      { method: 'GET', url: '/api/audio', name: 'Audio Files' }
+    ];
+
+    const results = [];
+
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Testing ${endpoint.name}...`);
+        const response = await api[endpoint.method.toLowerCase()](endpoint.url);
+        console.log(`✅ ${endpoint.name}:`, response.status, response.data?.message || 'OK');
+        results.push({ ...endpoint, status: 'success', response: response.data });
+      } catch (error) {
+        const status = error.response?.status || 'Network Error';
+        const message = error.response?.data?.message || error.message;
+        console.error(`❌ ${endpoint.name}:`, status, message);
+        results.push({ ...endpoint, status: 'error', error: { status, message } });
+      }
+    }
+
+    console.groupEnd();
+    return results;
+  }
+
+  /**
+   * Generate curl commands for manual testing
+   */
+  generateCurlCommands() {
+    const token = localStorage.getItem('token');
+    const baseURL = this.baseURL;
+
+    const commands = [
+      `# Test without auth (should return 401)`,
+      `curl -X GET "${baseURL}/api/devices"`,
+      ``,
+      `# Test with auth (should return 200)`,
+      `curl -X GET "${baseURL}/api/devices" \\`,
+      `  -H "Authorization: Bearer ${token || 'YOUR_TOKEN_HERE'}"`,
+      ``,
+      `# Test login`,
+      `curl -X POST "${baseURL}/api/auth/login" \\`,
+      `  -H "Content-Type: application/json" \\`,
+      `  -d '{"email":"your@email.com","password":"yourpassword"}'`,
+    ];
+
+    console.log('📋 Curl Commands for Manual Testing:');
+    console.log(commands.join('\n'));
+    return commands;
+  }
+}
+
+// Create singleton instance
+const apiTester = new APITester();
+
+// Make it available globally for debugging
+if (typeof window !== 'undefined') {
+  window.apiTester = apiTester;
+}
+
+export default apiTester;
+EOF
+
+echo "✅ apiTester.js created"
+
+# ==========================================
+# STEP 6: Build Frontend
+# ==========================================
+cd /var/www/ivr-platform/ivr_calling/frontend
+
+echo "🔍 Checking Node.js version..."
+node --version
+npm --version
+
+echo "📦 Installing dependencies..."
+npm install --production=false
+
+echo "🔨 Building frontend..."
+npm run build
+
+echo "📋 Build directory contents:"
+ls -la build/
+
+# ==========================================
+# STEP 7: Deploy to Web Directory
+# ==========================================
+echo "🚀 Deploying to web directory..."
+cp -r build/* /var/www/html/ivr/
+
+echo "🔍 Verifying deployment..."
+ls -la /var/www/html/ivr/
+
+# ==========================================
+# STEP 8: Test Deployment
+# ==========================================
+echo "🧪 Testing deployment..."
+
+echo "Testing frontend accessibility..."
+curl -s -o /dev/null -w "Frontend Status: %{http_code}\n" https://ivr.wxon.in
+
+echo "Testing API endpoint..."
+curl -s -o /dev/null -w "API Status: %{http_code}\n" https://ivr.wxon.in/api/devices
+
+echo "Testing with OPTIONS (CORS)..."
+curl -X OPTIONS -s -o /dev/null -w "OPTIONS Status: %{http_code}\n" https://ivr.wxon.in/api/devices
+
+# ==========================================
+# STEP 9: Check Backend Status
+# ==========================================
+echo "🔍 Checking backend status..."
+pm2 status
+
+echo "📋 Recent backend logs:"
+pm2 logs ivr-backend-8090 --lines 10 --nostream
+
+# ==========================================
+# STEP 10: Restart Services (if needed)
+# ==========================================
+echo "🔄 Restarting PM2 processes..."
+pm2 restart all
+pm2 save
+
+echo "✅ Deployment completed successfully!"
+
+# ==========================================
+# VERIFICATION COMMANDS
+# ==========================================
+echo ""
+echo "🧪 VERIFICATION COMMANDS:"
+echo "=========================="
+echo ""
+echo "1. Test API without auth (should return 401):"
+echo "   curl https://ivr.wxon.in/api/devices"
+echo ""
+echo "2. Test frontend loading:"
+echo "   curl -I https://ivr.wxon.in"
+echo ""
+echo "3. Check PM2 status:"
+echo "   pm2 status"
+echo ""
+echo "4. View backend logs:"
+echo "   pm2 logs ivr-backend-8090 --lines 20"
+echo ""
+echo "5. Test in browser console:"
+echo "   window.apiTester.testAllEndpoints()"
+echo ""
+echo "✅ ALL FIXES APPLIED SUCCESSFULLY!"
+EOF
+
+echo "✅ Manual commands file created"

@@ -2,9 +2,7 @@ const express = require('express');
 const { Op } = require('sequelize');
 const auth = require('../middleware/auth');
 const logger = require('../config/logger');
-const CallLog = require('../models/CallLog');
-const Campaign = require('../models/Campaign');
-const Contact = require('../models/Contact');
+const { CallLog, Campaign, Contact } = require('../models');
 
 const router = express.Router();
 

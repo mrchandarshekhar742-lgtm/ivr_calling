@@ -2,8 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const auth = require('../middleware/auth');
 const logger = require('../config/logger');
-const Campaign = require('../models/Campaign');
-const AudioFile = require('../models/AudioFile');
+const { Campaign, AudioFile } = require('../models');
 
 const router = express.Router();
 
