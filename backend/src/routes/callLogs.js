@@ -1,10 +1,76 @@
 const express = require('express');
 const { Op } = require('sequelize');
+const { body, validationResult } = require('express-validator');
 const auth = require('../middleware/auth');
 const logger = require('../config/logger');
 const { CallLog, Campaign, Contact } = require('../models');
 
 const router = express.Router();
+
+// @route   POST /api/call-logs
+// @desc    Create new call log entry
+// @access  Private
+router.post('/', auth, [
+  body('phoneNumber').trim().isLength({ min: 10, max: 15 }),
+  body('deviceId').trim().isLength({ min: 1 }),
+  body('status').isIn(['initiated', 'ringing', 'answered', 'completed', 'failed', 'busy', 'no_answer']),
+  body('contactId').optional().isInt(),
+  body('campaignId').optional().isInt(),
+  body('audioFileId').optional().isInt()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid input',
+        errors: errors.array()
+      });
+    }
+
+    const { 
+      phoneNumber, 
+      deviceId, 
+      status, 
+      contactId, 
+      campaignId, 
+      audioFileId,
+      duration = 0,
+      dtmfResponse = '',
+      callType = 'outbound',
+      metadata = {}
+    } = req.body;
+
+    const callLog = await CallLog.create({
+      userId: req.user.id,
+      phoneNumber,
+      deviceId,
+      status,
+      contactId: contactId || null,
+      campaignId: campaignId || null,
+      audioFileId: audioFileId || null,
+      duration,
+      dtmfResponse,
+      callType,
+      metadata,
+      startTime: new Date()
+    });
+
+    logger.info(`Call log created: ${phoneNumber} via ${deviceId} by ${req.user.email}`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Call log created successfully',
+      data: callLog
+    });
+  } catch (error) {
+    logger.error('Create call log error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
 
 // @route   GET /api/call-logs/export/csv
 // @desc    Export call logs as CSV
@@ -138,3 +204,212 @@ router.get('/', auth, async (req, res) => {
 });
 
 module.exports = router;
+// @route   PUT /api/call-logs/:callId/status
+// @desc    Update call log status
+// @access  Private
+router.put('/:callId/status', auth, [
+  body('status').isIn(['initiated', 'ringing', 'answered', 'completed', 'failed', 'busy', 'no_answer']),
+  body('deviceId').optional().trim(),
+  body('answered').optional().isBoolean(),
+  body('notes').optional().trim()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid input',
+        errors: errors.array()
+      });
+    }
+
+    const { callId } = req.params;
+    const { status, deviceId, answered, notes } = req.body;
+
+    // Find or create call log
+    let callLog = await CallLog.findOne({
+      where: { 
+        id: callId,
+        userId: req.user.id 
+      }
+    });
+
+    if (!callLog) {
+      // Create new call log if not exists (for backward compatibility)
+      callLog = await CallLog.create({
+        id: callId,
+        userId: req.user.id,
+        deviceId: deviceId || 'unknown',
+        status,
+        answered: answered || false,
+        notes: notes || '',
+        startTime: new Date()
+      });
+    } else {
+      // Update existing call log
+      await callLog.update({
+        status,
+        answered: answered !== undefined ? answered : callLog.answered,
+        notes: notes || callLog.notes,
+        endTime: ['completed', 'failed', 'no_answer'].includes(status) ? new Date() : callLog.endTime
+      });
+    }
+
+    logger.info(`Call log status updated: ${callId} -> ${status} by device ${deviceId}`);
+
+    res.json({
+      success: true,
+      message: 'Call status updated successfully',
+      data: callLog
+    });
+  } catch (error) {
+    logger.error('Update call status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   PUT /api/call-logs/:callId/dtmf
+// @desc    Update DTMF response for call log
+// @access  Private
+router.put('/:callId/dtmf', auth, [
+  body('dtmfResponse').trim().isLength({ min: 1, max: 10 }),
+  body('deviceId').optional().trim(),
+  body('timestamp').optional().isISO8601()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid input',
+        errors: errors.array()
+      });
+    }
+
+    const { callId } = req.params;
+    const { dtmfResponse, deviceId, timestamp } = req.body;
+
+    // Find call log
+    let callLog = await CallLog.findOne({
+      where: { 
+        id: callId,
+        userId: req.user.id 
+      }
+    });
+
+    if (!callLog) {
+      return res.status(404).json({
+        success: false,
+        message: 'Call log not found'
+      });
+    }
+
+    // Update DTMF response
+    await callLog.update({
+      dtmfResponse,
+      dtmfTimestamp: timestamp ? new Date(timestamp) : new Date(),
+      answered: true // If DTMF response received, call was answered
+    });
+
+    logger.info(`DTMF response recorded: ${callId} -> ${dtmfResponse} by device ${deviceId}`);
+
+    res.json({
+      success: true,
+      message: 'DTMF response recorded successfully',
+      data: {
+        callId,
+        dtmfResponse,
+        timestamp: callLog.dtmfTimestamp
+      }
+    });
+  } catch (error) {
+    logger.error('Update DTMF response error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   GET /api/call-logs/:callId
+// @desc    Get single call log
+// @access  Private
+router.get('/:callId', auth, async (req, res) => {
+  try {
+    const callLog = await CallLog.findOne({
+      where: { 
+        id: req.params.callId,
+        userId: req.user.id 
+      },
+      include: [
+        {
+          model: Campaign,
+          as: 'campaign',
+          attributes: ['id', 'name', 'type']
+        },
+        {
+          model: Contact,
+          as: 'contact',
+          attributes: ['id', 'name', 'phone']
+        }
+      ]
+    });
+
+    if (!callLog) {
+      return res.status(404).json({
+        success: false,
+        message: 'Call log not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: callLog
+    });
+  } catch (error) {
+    logger.error('Get call log error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   DELETE /api/call-logs/:callId
+// @desc    Delete call log
+// @access  Private
+router.delete('/:callId', auth, async (req, res) => {
+  try {
+    const callLog = await CallLog.findOne({
+      where: { 
+        id: req.params.callId,
+        userId: req.user.id 
+      }
+    });
+
+    if (!callLog) {
+      return res.status(404).json({
+        success: false,
+        message: 'Call log not found'
+      });
+    }
+
+    await callLog.destroy();
+
+    logger.info(`Call log deleted: ${req.params.callId} by ${req.user.email}`);
+
+    res.json({
+      success: true,
+      message: 'Call log deleted successfully'
+    });
+  } catch (error) {
+    logger.error('Delete call log error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});

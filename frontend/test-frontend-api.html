@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Frontend API</title>
+</head>
+<body>
+    <h1>Test Frontend API</h1>
+    <button onclick="testLogin()">Test Login</button>
+    <button onclick="testDevices()">Test Devices</button>
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = 'https://ivr.wxon.in';
+        
+        async function testLogin() {
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@ivr.com',
+                        password: 'admin123'
+                    })
+                });
+                
+                const data = await response.json();
+                console.log('Login response:', data);
+                
+                if (data.success) {
+                    localStorage.setItem('token', data.data.token);
+                    document.getElementById('results').innerHTML = '<p style="color: green;">✅ Login successful!</p>';
+                } else {
+                    document.getElementById('results').innerHTML = '<p style="color: red;">❌ Login failed</p>';
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                document.getElementById('results').innerHTML = '<p style="color: red;">❌ Login error: ' + error.message + '</p>';
+            }
+        }
+        
+        async function testDevices() {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    document.getElementById('results').innerHTML = '<p style="color: red;">❌ No token found. Login first.</p>';
+                    return;
+                }
+                
+                const response = await fetch(`${API_BASE}/api/devices`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('Devices response:', data);
+                
+                document.getElementById('results').innerHTML = `
+                    <h3>Devices API Response:</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                console.error('Devices error:', error);
+                document.getElementById('results').innerHTML = '<p style="color: red;">❌ Devices error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

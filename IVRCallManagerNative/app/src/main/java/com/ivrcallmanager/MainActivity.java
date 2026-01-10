@@ -1,6 +1,9 @@
 package com.ivrcallmanager;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -11,6 +14,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.ivrcallmanager.utils.PreferenceManager;
 
@@ -21,12 +26,16 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.Date;
+import java.text.SimpleDateFormat;
+import java.util.Locale;
 
 import org.json.JSONObject;
 
 public class MainActivity extends AppCompatActivity {
     
     private static final String TAG = "MainActivity";
+    private static final int PERMISSION_REQUEST_CODE = 123;
     
     private TextView statusText;
     private TextView deviceIdText;
@@ -39,8 +48,10 @@ public class MainActivity extends AppCompatActivity {
     private PreferenceManager prefManager;
     private boolean isLoggedIn = false;
     private boolean isConnected = false;
+    private boolean isPolling = false;
     private ExecutorService executor;
     private Handler mainHandler;
+    private Handler pollingHandler;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,13 +64,35 @@ public class MainActivity extends AppCompatActivity {
             prefManager = new PreferenceManager(this);
             executor = Executors.newSingleThreadExecutor();
             mainHandler = new Handler(Looper.getMainLooper());
+            pollingHandler = new Handler(Looper.getMainLooper());
             
+            checkPermissions();
             checkLoginStatus();
             updateUI();
             
         } catch (Exception e) {
             Log.e(TAG, "Error in onCreate", e);
             Toast.makeText(this, "Error initializing app", Toast.LENGTH_LONG).show();
+        }
+    }
+    
+    private void checkPermissions() {
+        String[] permissions = {
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.RECORD_AUDIO
+        };
+        
+        boolean needsPermission = false;
+        for (String permission : permissions) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                needsPermission = true;
+                break;
+            }
+        }
+        
+        if (needsPermission) {
+            ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE);
         }
     }
     
@@ -108,7 +141,13 @@ public class MainActivity extends AppCompatActivity {
                 disconnectButton.setEnabled(isConnected);
                 settingsButton.setEnabled(true);
                 
-                statusText.setText(isConnected ? "Connected" : "Disconnected");
+                if (isConnected && isPolling) {
+                    statusText.setText("Connected - Listening for calls");
+                } else if (isConnected) {
+                    statusText.setText("Connected");
+                } else {
+                    statusText.setText("Disconnected");
+                }
             } else {
                 loginButton.setText("Login");
                 
@@ -150,12 +189,13 @@ public class MainActivity extends AppCompatActivity {
     
     private void logout() {
         try {
+            stopPolling();
             prefManager.clearAuthData();
             isLoggedIn = false;
             isConnected = false;
             
-            // Generate new device ID for next user
-            prefManager.generateNewDeviceId();
+            // Keep same device ID - don't generate new one
+            // prefManager.generateNewDeviceId(); // Removed to maintain consistent device ID
             
             updateUI();
             Toast.makeText(this, "Logged out successfully", Toast.LENGTH_SHORT).show();
@@ -207,6 +247,7 @@ public class MainActivity extends AppCompatActivity {
         try {
             if (isConnected) {
                 updateDeviceStatus("offline");
+                stopPolling();
             }
             
             isConnected = false;
@@ -317,7 +358,10 @@ public class MainActivity extends AppCompatActivity {
                 // Update device status to online
                 updateDeviceStatus("online");
                 
-                Toast.makeText(this, "Device registered and connected!", Toast.LENGTH_SHORT).show();
+                // Start polling for call commands
+                startPolling();
+                
+                Toast.makeText(this, "Device registered and listening for calls!", Toast.LENGTH_SHORT).show();
                 
             } else {
                 String message = json.optString("message", "Device registration failed");
@@ -328,6 +372,305 @@ public class MainActivity extends AppCompatActivity {
             Log.e(TAG, "Error parsing device registration response", e);
             Toast.makeText(this, "Error parsing server response", Toast.LENGTH_LONG).show();
         }
+    }
+    
+    private void startPolling() {
+        if (isPolling) return;
+        
+        isPolling = true;
+        updateUI();
+        
+        Log.d(TAG, "Starting call command polling...");
+        
+        Runnable pollRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (isPolling && isConnected) {
+                    executor.execute(() -> {
+                        try {
+                            checkForCallCommands();
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error checking for call commands", e);
+                        }
+                    });
+                    
+                    // Poll every 5 seconds
+                    pollingHandler.postDelayed(this, 5000);
+                }
+            }
+        };
+        
+        pollingHandler.post(pollRunnable);
+    }
+    
+    private void stopPolling() {
+        isPolling = false;
+        pollingHandler.removeCallbacksAndMessages(null);
+        updateUI();
+        Log.d(TAG, "Stopped call command polling");
+    }
+    
+    private void checkForCallCommands() throws Exception {
+        URL url = new URL("https://ivr.wxon.in/api/devices/" + prefManager.getDeviceId() + "/commands");
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        
+        try {
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Authorization", "Bearer " + prefManager.getAuthToken());
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            
+            int responseCode = conn.getResponseCode();
+            
+            if (responseCode == 200) {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+                reader.close();
+                
+                String responseStr = response.toString();
+                Log.d(TAG, "Call commands response: " + responseStr);
+                
+                if (!responseStr.trim().isEmpty() && !responseStr.equals("{}")) {
+                    mainHandler.post(() -> handleCallCommand(responseStr));
+                }
+            }
+            
+        } finally {
+            conn.disconnect();
+        }
+    }
+    
+    private void handleCallCommand(String commandJson) {
+        try {
+            JSONObject command = new JSONObject(commandJson);
+            String action = command.optString("action");
+            
+            if ("make_call".equals(action)) {
+                String phoneNumber = command.optString("phoneNumber");
+                String callId = command.optString("callId");
+                int audioFileId = command.optInt("audioFileId", 0);
+                
+                Log.d(TAG, "Received call command: " + phoneNumber + " (CallID: " + callId + ")");
+                
+                // Show notification to user
+                Toast.makeText(this, "📞 Making call to: " + phoneNumber, Toast.LENGTH_LONG).show();
+                
+                // Update status text
+                statusText.setText("Making call to: " + phoneNumber);
+                
+                // Store current call info for tracking
+                prefManager.setCurrentCallId(callId);
+                prefManager.setCurrentPhoneNumber(phoneNumber);
+                prefManager.setCurrentAudioFileId(audioFileId);
+                
+                // Make the actual phone call
+                makePhoneCall(phoneNumber, callId);
+            }
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error handling call command", e);
+        }
+    }
+    
+    private void makePhoneCall(String phoneNumber, String callId) {
+        try {
+            // Check if we have CALL_PHONE permission
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) 
+                != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Phone permission required", Toast.LENGTH_LONG).show();
+                return;
+            }
+            
+            Log.d(TAG, "Making phone call to: " + phoneNumber);
+            
+            // Report call initiation
+            reportCallStatus(callId, "initiated", null, null);
+            
+            // Create intent to make phone call
+            Intent callIntent = new Intent(Intent.ACTION_CALL);
+            callIntent.setData(Uri.parse("tel:" + phoneNumber));
+            
+            // Start the call
+            startActivity(callIntent);
+            
+            Toast.makeText(this, "📞 Call initiated to: " + phoneNumber, Toast.LENGTH_SHORT).show();
+            
+            // Start monitoring call state and DTMF
+            startCallMonitoring(callId, phoneNumber);
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error making phone call", e);
+            Toast.makeText(this, "Failed to make call: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            
+            if (callId != null) {
+                reportCallStatus(callId, "failed", null, "Error: " + e.getMessage());
+            }
+        }
+    }
+    
+    private void startCallMonitoring(String callId, String phoneNumber) {
+        // Monitor call state changes
+        Handler callMonitorHandler = new Handler(Looper.getMainLooper());
+        
+        Runnable callMonitorRunnable = new Runnable() {
+            private int checkCount = 0;
+            private boolean callAnswered = false;
+            private long callStartTime = System.currentTimeMillis();
+            
+            @Override
+            public void run() {
+                checkCount++;
+                
+                try {
+                    // Check if call is still active (simplified check)
+                    // In a real implementation, you'd use TelecomManager or PhoneStateListener
+                    
+                    if (checkCount == 3 && !callAnswered) {
+                        // Assume call was answered after 3 seconds (simplified)
+                        callAnswered = true;
+                        reportCallStatus(callId, "answered", true, null);
+                        
+                        // Show DTMF input dialog
+                        showDTMFDialog(callId, phoneNumber);
+                    }
+                    
+                    if (checkCount < 30) { // Monitor for 30 seconds max
+                        callMonitorHandler.postDelayed(this, 1000);
+                    } else {
+                        // Call monitoring timeout
+                        if (callAnswered) {
+                            long duration = (System.currentTimeMillis() - callStartTime) / 1000;
+                            reportCallStatus(callId, "completed", true, "Duration: " + duration + "s");
+                        } else {
+                            reportCallStatus(callId, "no_answer", false, "No answer after 30s");
+                        }
+                    }
+                    
+                } catch (Exception e) {
+                    Log.e(TAG, "Error in call monitoring", e);
+                }
+            }
+        };
+        
+        callMonitorHandler.postDelayed(callMonitorRunnable, 1000);
+    }
+    
+    private void showDTMFDialog(String callId, String phoneNumber) {
+        runOnUiThread(() -> {
+            try {
+                android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+                builder.setTitle("DTMF Response Tracking");
+                builder.setMessage("Call to " + phoneNumber + " is active.\nDid the caller press any buttons?");
+                
+                // Create DTMF button grid
+                String[] dtmfOptions = {"No Response", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "*", "#"};
+                
+                builder.setItems(dtmfOptions, (dialog, which) -> {
+                    String dtmfResponse = dtmfOptions[which];
+                    
+                    if (!"No Response".equals(dtmfResponse)) {
+                        Log.d(TAG, "DTMF Response recorded: " + dtmfResponse);
+                        Toast.makeText(this, "DTMF Response: " + dtmfResponse, Toast.LENGTH_SHORT).show();
+                        
+                        // Report DTMF response
+                        reportDTMFResponse(callId, dtmfResponse);
+                    }
+                    
+                    // Update status
+                    statusText.setText("Call completed - DTMF: " + dtmfResponse);
+                });
+                
+                builder.setNegativeButton("Call Ended", (dialog, which) -> {
+                    long duration = (System.currentTimeMillis() - System.currentTimeMillis()) / 1000;
+                    reportCallStatus(callId, "completed", true, "Manual end");
+                    statusText.setText("Ready for next call");
+                });
+                
+                builder.setCancelable(false);
+                builder.show();
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Error showing DTMF dialog", e);
+            }
+        });
+    }
+    
+    private void reportDTMFResponse(String callId, String dtmfResponse) {
+        if (callId == null) return;
+        
+        executor.execute(() -> {
+            try {
+                URL url = new URL("https://ivr.wxon.in/api/call-logs/" + callId + "/dtmf");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                
+                try {
+                    conn.setRequestMethod("PUT");
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    conn.setRequestProperty("Authorization", "Bearer " + prefManager.getAuthToken());
+                    conn.setDoOutput(true);
+                    
+                    JSONObject json = new JSONObject();
+                    json.put("dtmfResponse", dtmfResponse);
+                    json.put("deviceId", prefManager.getDeviceId());
+                    json.put("timestamp", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(new Date()));
+                    
+                    OutputStream os = conn.getOutputStream();
+                    os.write(json.toString().getBytes("UTF-8"));
+                    os.close();
+                    
+                    int responseCode = conn.getResponseCode();
+                    Log.d(TAG, "DTMF response report: " + responseCode);
+                    
+                } finally {
+                    conn.disconnect();
+                }
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Error reporting DTMF response", e);
+            }
+        });
+    }
+    
+    private void reportCallStatus(String callId, String status, Boolean answered, String notes) {
+        if (callId == null) return;
+        
+        executor.execute(() -> {
+            try {
+                URL url = new URL("https://ivr.wxon.in/api/call-logs/" + callId + "/status");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                
+                try {
+                    conn.setRequestMethod("PUT");
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    conn.setRequestProperty("Authorization", "Bearer " + prefManager.getAuthToken());
+                    conn.setDoOutput(true);
+                    
+                    JSONObject json = new JSONObject();
+                    json.put("status", status);
+                    json.put("deviceId", prefManager.getDeviceId());
+                    if (answered != null) json.put("answered", answered);
+                    if (notes != null) json.put("notes", notes);
+                    json.put("timestamp", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(new Date()));
+                    
+                    OutputStream os = conn.getOutputStream();
+                    os.write(json.toString().getBytes("UTF-8"));
+                    os.close();
+                    
+                    int responseCode = conn.getResponseCode();
+                    Log.d(TAG, "Call status report response: " + responseCode);
+                    
+                } finally {
+                    conn.disconnect();
+                }
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Error reporting call status", e);
+            }
+        });
     }
     
     private void updateDeviceStatus(String status) {
@@ -382,6 +725,7 @@ public class MainActivity extends AppCompatActivity {
         // Update status to offline when app closes
         if (isConnected) {
             updateDeviceStatus("offline");
+            stopPolling();
         }
         
         if (executor != null) {

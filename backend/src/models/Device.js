@@ -70,6 +70,11 @@ const Device = sequelize.define('Device', {
       failedCalls: 0,
       lastCallAt: null
     }
+  },
+  pendingCommands: {
+    type: DataTypes.JSON,
+    defaultValue: [],
+    field: 'pending_commands'  // Map to database column name
   }
 }, {
   tableName: 'devices',

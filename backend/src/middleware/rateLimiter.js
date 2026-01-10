@@ -25,21 +25,21 @@ const createRateLimiter = (windowMs, max, message) => {
 // General API rate limiter
 const apiLimiter = createRateLimiter(
   15 * 60 * 1000, // 15 minutes
-  process.env.NODE_ENV === 'production' ? 100 : 1000, // 100 requests per 15 minutes in production
+  process.env.NODE_ENV === 'production' ? 1000 : 2000, // Increased: 1000 requests per 15 minutes in production
   'Too many API requests'
 );
 
 // Strict rate limiter for auth endpoints
 const authLimiter = createRateLimiter(
   15 * 60 * 1000, // 15 minutes
-  5, // 5 attempts per 15 minutes
+  10, // 10 attempts per 15 minutes
   'Too many authentication attempts'
 );
 
 // File upload rate limiter
 const uploadLimiter = createRateLimiter(
   60 * 60 * 1000, // 1 hour
-  10, // 10 uploads per hour
+  20, // 20 uploads per hour
   'Too many file uploads'
 );
 

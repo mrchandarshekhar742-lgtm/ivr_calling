@@ -7,6 +7,8 @@ const Contacts = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingContact, setEditingContact] = useState(null);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showBulkText, setShowBulkText] = useState(false);
   const [bulkNumbers, setBulkNumbers] = useState('');
@@ -45,14 +47,39 @@ const Contacts = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/api/contacts', formData);
+      if (editingContact) {
+        // Update existing contact
+        await api.put(`/api/contacts/${editingContact.id}`, formData);
+        setShowEditForm(false);
+        setEditingContact(null);
+      } else {
+        // Add new contact
+        await api.post('/api/contacts', formData);
+        setShowAddForm(false);
+      }
       setFormData({ name: '', phone: '', email: '', notes: '' });
-      setShowAddForm(false);
       fetchContacts();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to add contact');
-      console.error('Add contact error:', err);
+      setError(err.response?.data?.message || `Failed to ${editingContact ? 'update' : 'add'} contact`);
+      console.error(`${editingContact ? 'Update' : 'Add'} contact error:`, err);
     }
+  };
+
+  const handleEdit = (contact) => {
+    setEditingContact(contact);
+    setFormData({
+      name: contact.name,
+      phone: contact.phone,
+      email: contact.email || '',
+      notes: contact.notes || ''
+    });
+    setShowEditForm(true);
+  };
+
+  const handleCancelEdit = () => {
+    setShowEditForm(false);
+    setEditingContact(null);
+    setFormData({ name: '', phone: '', email: '', notes: '' });
   };
 
   const handleDelete = async (contactId) => {
@@ -104,58 +131,56 @@ const Contacts = () => {
   };
 
   const handleBulkTextImport = async (contactsData = null) => {
-    let contactsToImport;
-    
     if (contactsData) {
-      // From CSV import
-      contactsToImport = contactsData;
+      // From CSV import - use bulk endpoint
+      try {
+        setLoading(true);
+        const response = await api.post('/api/contacts/bulk', { 
+          contacts: contactsData 
+        });
+        
+        setShowBulkImport(false);
+        setBulkNumbers('');
+        fetchContacts();
+        setError('');
+        
+        const added = response.data.data?.added || contactsData.length;
+        alert(`Successfully added ${added} contacts!`);
+        
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to import contacts');
+        console.error('Bulk import error:', err);
+      } finally {
+        setLoading(false);
+      }
     } else {
-      // From text input
+      // From text input - use bulk-text endpoint
       if (!bulkNumbers.trim()) {
         setError('Please enter phone numbers');
         return;
       }
-      
-      const numbers = bulkNumbers
-        .split(/[,\n\s]+/)
-        .map(num => num.trim())
-        .filter(num => num.length > 0)
-        .map(num => num.replace(/[^\d+]/g, ''));
 
-      if (numbers.length === 0) {
-        setError('No valid phone numbers found');
-        return;
+      try {
+        setLoading(true);
+        
+        const response = await api.post('/api/contacts/bulk-text', { 
+          numbers: bulkNumbers 
+        });
+        
+        setShowBulkText(false);
+        setBulkNumbers('');
+        fetchContacts();
+        setError('');
+        
+        const added = response.data.data?.added || 0;
+        alert(`Successfully added ${added} contacts!`);
+        
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to import contacts');
+        console.error('Bulk import error:', err);
+      } finally {
+        setLoading(false);
       }
-
-      contactsToImport = numbers.map((phone, index) => ({
-        name: `Contact ${index + 1}`,
-        phone: phone,
-        email: '',
-        notes: 'Added via bulk text import'
-      }));
-    }
-
-    try {
-      setLoading(true);
-      
-      const response = await api.post('/api/contacts/bulk-text', { 
-        contacts: contactsToImport 
-      });
-      
-      setShowBulkText(false);
-      setShowBulkImport(false);
-      setBulkNumbers('');
-      fetchContacts();
-      setError('');
-      
-      const added = response.data.data?.added || contactsToImport.length;
-      alert(`Successfully added ${added} contacts!`);
-      
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to import contacts');
-      console.error('Bulk import error:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -198,10 +223,12 @@ const Contacts = () => {
         </div>
       )}
 
-      {/* Add Contact Form */}
-      {showAddForm && (
+      {/* Add/Edit Contact Form */}
+      {(showAddForm || showEditForm) && (
         <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Contact</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">
+            {editingContact ? 'Edit Contact' : 'Add New Contact'}
+          </h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -262,7 +289,7 @@ const Contacts = () => {
             <div className="flex justify-end space-x-3">
               <button
                 type="button"
-                onClick={() => setShowAddForm(false)}
+                onClick={editingContact ? handleCancelEdit : () => setShowAddForm(false)}
                 className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
               >
                 Cancel
@@ -271,7 +298,7 @@ const Contacts = () => {
                 type="submit"
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Add Contact
+                {editingContact ? 'Update Contact' : 'Add Contact'}
               </button>
             </div>
           </form>
@@ -414,7 +441,10 @@ const Contacts = () => {
                       }
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                      <button className="text-blue-600 hover:text-blue-900">
+                      <button 
+                        onClick={() => handleEdit(contact)}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
                         Edit
                       </button>
                       <button

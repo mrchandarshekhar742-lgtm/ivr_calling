@@ -16,6 +16,7 @@ import AudioFiles from './pages/AudioFiles.jsx';
 import CallScheduler from './pages/CallScheduler.jsx';
 import CallLogs from './pages/CallLogs.jsx';
 import AndroidDevices from './pages/AndroidDevices.jsx';
+import MultiDeviceMonitor from './pages/MultiDeviceMonitor.jsx';
 import Analytics from './pages/Analytics.jsx';
 import Profile from './pages/Profile.jsx';
 import Settings from './pages/Settings.jsx';
@@ -102,6 +103,24 @@ function App() {
         />
         
         <Route 
+          path="/create-campaign" 
+          element={
+            <ProtectedRoute>
+              <CreateCampaign />
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/android-devices" 
+          element={
+            <ProtectedRoute>
+              <AndroidDevices />
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
           path="/campaigns/:id" 
           element={
             <ProtectedRoute>
@@ -151,6 +170,15 @@ function App() {
           element={
             <ProtectedRoute>
               <AndroidDevices />
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/multi-device-monitor" 
+          element={
+            <ProtectedRoute>
+              <MultiDeviceMonitor />
             </ProtectedRoute>
           } 
         />

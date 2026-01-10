@@ -27,11 +27,12 @@ const Layout = ({ children }) => {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
     { name: 'Campaigns', href: '/campaigns', icon: MegaphoneIcon },
+    { name: 'Multi-Device Monitor', href: '/multi-device-monitor', icon: ChartBarIcon },
     { name: 'Contacts', href: '/contacts', icon: UsersIcon },
     { name: 'Audio Files', href: '/audio', icon: SpeakerWaveIcon },
     { name: 'Call Scheduler', href: '/scheduler', icon: ClockIcon },
     { name: 'Call Logs', href: '/call-logs', icon: PhoneIcon },
-    { name: 'Android Devices', href: '/devices', icon: DevicePhoneMobileIcon },
+    { name: 'Android Devices', href: '/android-devices', icon: DevicePhoneMobileIcon },
     { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
   ];
 

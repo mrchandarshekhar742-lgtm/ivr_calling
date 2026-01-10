@@ -1,9 +1,0 @@
-cd /var/www/ivr-platform/ivr_calling/backend/src/routes
-curl -o analytics.js https://raw.githubusercontent.com/mrchandarshekhar742-lgtm/ivr_calling/ca5c80f/backend/src/routes/analytics.js
-cat analytics.js | grep -A 2 -B 2 "try {"
-cd /var/www/ivr-platform/ivr_calling/backend
-pm2 delete ivr-backend-8090
-pm2 start server.js --name "ivr-backend-8090" --env production
-pm2 save
-sleep 5
-pm2 logs ivr-backend-8090 --lines 20 --nostream

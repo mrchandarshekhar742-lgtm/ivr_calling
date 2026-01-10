@@ -51,9 +51,9 @@ public class LoginActivity extends AppCompatActivity {
             executor = Executors.newSingleThreadExecutor();
             mainHandler = new Handler(Looper.getMainLooper());
             
-            // Pre-fill with default credentials
-            emailEdit.setText("admin@ivr.com");
-            passwordEdit.setText("admin123");
+            // Don't pre-fill credentials - let user enter their own
+            // emailEdit.setText("");
+            // passwordEdit.setText("");
             
         } catch (Exception e) {
             Log.e(TAG, "Error in onCreate", e);
@@ -277,9 +277,9 @@ public class LoginActivity extends AppCompatActivity {
     }
     
     private String generateDeviceId() {
-        // Generate unique device ID
+        // Generate consistent device ID based on Android ID only
         String androidId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
-        return "DEVICE_" + androidId + "_" + System.currentTimeMillis();
+        return "DEVICE_" + androidId;
     }
     
     private String getDeviceName() {

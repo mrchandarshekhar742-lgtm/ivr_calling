@@ -51,6 +51,7 @@ const Contact = sequelize.define('Contact', {
   campaignId: {
     type: DataTypes.INTEGER,
     allowNull: true,
+    field: 'campaign_id', // Map to database column name
     references: {
       model: 'campaigns',
       key: 'id'
@@ -59,6 +60,7 @@ const Contact = sequelize.define('Contact', {
   createdBy: {
     type: DataTypes.INTEGER,
     allowNull: false,
+    field: 'created_by', // Map to database column name
     references: {
       model: 'users',
       key: 'id'
@@ -66,14 +68,17 @@ const Contact = sequelize.define('Contact', {
   },
   callAttempts: {
     type: DataTypes.INTEGER,
+    field: 'call_attempts', // Map to database column name
     defaultValue: 0
   },
   lastCallDate: {
     type: DataTypes.DATE,
+    field: 'last_call_date', // Map to database column name
     allowNull: true
   },
   lastResponse: {
     type: DataTypes.STRING(10),
+    field: 'last_response', // Map to database column name
     allowNull: true
   },
   notes: {
@@ -82,6 +87,7 @@ const Contact = sequelize.define('Contact', {
   },
   customFields: {
     type: DataTypes.JSON,
+    field: 'custom_fields', // Map to database column name
     defaultValue: {}
   }
 }, {

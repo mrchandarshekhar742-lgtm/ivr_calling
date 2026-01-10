@@ -24,12 +24,13 @@ const Campaign = sequelize.define('Campaign', {
     defaultValue: 'draft'
   },
   type: {
-    type: DataTypes.ENUM('bulk', 'scheduled', 'triggered'),
+    type: DataTypes.ENUM('bulk', 'scheduled', 'triggered', 'broadcast', 'survey', 'notification', 'reminder'),
     allowNull: false
   },
   audioFileId: {
     type: DataTypes.INTEGER,
     allowNull: true,
+    field: 'audio_file_id', // Map to database column name
     references: {
       model: 'audio_files',
       key: 'id'
@@ -38,6 +39,7 @@ const Campaign = sequelize.define('Campaign', {
   createdBy: {
     type: DataTypes.INTEGER,
     allowNull: false,
+    field: 'created_by', // Map to database column name
     references: {
       model: 'users',
       key: 'id'

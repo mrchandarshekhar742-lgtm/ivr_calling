@@ -55,10 +55,14 @@ const Campaigns = () => {
 
   const getStatusColor = (status) => {
     switch (status) {
+      case 'draft': return 'bg-gray-100 text-gray-800';
+      case 'running': 
       case 'active': return 'bg-green-100 text-green-800';
       case 'paused': return 'bg-yellow-100 text-yellow-800';
       case 'completed': return 'bg-blue-100 text-blue-800';
-      case 'draft': return 'bg-gray-100 text-gray-800';
+      case 'stopped': return 'bg-red-100 text-red-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
+      case 'failed': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -74,7 +78,7 @@ const Campaigns = () => {
           <p className="text-gray-600">Manage your IVR campaigns</p>
         </div>
         <Link
-          to="/campaigns/new"
+          to="/create-campaign"
           className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
         >
           Create Campaign
@@ -88,9 +92,28 @@ const Campaigns = () => {
         </div>
       )}
 
+      {/* Debug Panel - Temporary for troubleshooting */}
+      {campaigns.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 className="text-sm font-medium text-blue-800 mb-2">Campaign Debug Information</h3>
+          <div className="text-xs text-blue-700">
+            <p>Total Campaigns: {campaigns.length}</p>
+            <p>Filtered Campaigns: {filteredCampaigns.length}</p>
+            <div className="mt-2">
+              <p className="font-medium">Campaign Statuses:</p>
+              {campaigns.slice(0, 5).map(campaign => (
+                <div key={campaign.id} className="ml-2">
+                  {campaign.name}: <span className="font-mono">{campaign.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
-      <div className="flex space-x-4">
-        {['all', 'draft', 'active', 'paused', 'completed'].map(status => (
+      <div className="flex flex-wrap gap-2">
+        {['all', 'draft', 'running', 'active', 'paused', 'completed', 'stopped', 'cancelled'].map(status => (
           <button
             key={status}
             onClick={() => setFilter(status)}
@@ -100,7 +123,7 @@ const Campaigns = () => {
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            {status}
+            {status === 'all' ? 'All Campaigns' : status}
           </button>
         ))}
       </div>
@@ -118,7 +141,7 @@ const Campaigns = () => {
               }
             </p>
             <Link
-              to="/campaigns/new"
+              to="/create-campaign"
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
             >
               Create Your First Campaign
@@ -181,57 +204,89 @@ const Campaigns = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(campaign.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                      <Link
-                        to={`/campaigns/${campaign.id}`}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        View
-                      </Link>
-                      
-                      {campaign.status === 'draft' && (
-                        <button
-                          onClick={() => handleStatusChange(campaign.id, 'start')}
-                          className="text-green-600 hover:text-green-900"
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center space-x-2">
+                        <Link
+                          to={`/campaigns/${campaign.id}`}
+                          className="text-blue-600 hover:text-blue-900 font-medium"
                         >
-                          Start
-                        </button>
-                      )}
-                      
-                      {campaign.status === 'active' && (
-                        <>
+                          View
+                        </Link>
+                        
+                        {/* Edit button - available for draft and paused campaigns */}
+                        {['draft', 'paused'].includes(campaign.status) && (
+                          <button
+                            onClick={() => {
+                              // Navigate to edit page (you can implement this)
+                              window.location.href = `/campaigns/${campaign.id}/edit`;
+                            }}
+                            className="text-indigo-600 hover:text-indigo-900 font-medium"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        
+                        {/* Start button - for draft campaigns */}
+                        {campaign.status === 'draft' && (
+                          <button
+                            onClick={() => handleStatusChange(campaign.id, 'start')}
+                            className="text-green-600 hover:text-green-900 font-medium"
+                          >
+                            Start
+                          </button>
+                        )}
+                        
+                        {/* Pause button - for running campaigns */}
+                        {['running', 'active'].includes(campaign.status) && (
                           <button
                             onClick={() => handleStatusChange(campaign.id, 'pause')}
-                            className="text-yellow-600 hover:text-yellow-900"
+                            className="text-yellow-600 hover:text-yellow-900 font-medium"
                           >
                             Pause
                           </button>
+                        )}
+                        
+                        {/* Resume button - for paused campaigns */}
+                        {campaign.status === 'paused' && (
+                          <button
+                            onClick={() => handleStatusChange(campaign.id, 'resume')}
+                            className="text-green-600 hover:text-green-900 font-medium"
+                          >
+                            Resume
+                          </button>
+                        )}
+                        
+                        {/* Stop button - for running/active campaigns */}
+                        {['running', 'active'].includes(campaign.status) && (
                           <button
                             onClick={() => handleStatusChange(campaign.id, 'stop')}
-                            className="text-red-600 hover:text-red-900"
+                            className="text-red-600 hover:text-red-900 font-medium"
                           >
                             Stop
                           </button>
-                        </>
-                      )}
-                      
-                      {campaign.status === 'paused' && (
+                        )}
+                        
+                        {/* Delete button - for draft, completed, cancelled campaigns */}
+                        {['draft', 'completed', 'cancelled', 'stopped'].includes(campaign.status) && (
+                          <button
+                            onClick={() => handleDelete(campaign.id)}
+                            className="text-red-600 hover:text-red-900 font-medium"
+                          >
+                            Delete
+                          </button>
+                        )}
+                        
+                        {/* Duplicate button - create copy of campaign */}
                         <button
-                          onClick={() => handleStatusChange(campaign.id, 'resume')}
-                          className="text-green-600 hover:text-green-900"
+                          onClick={() => {
+                            // Navigate to create campaign with pre-filled data
+                            window.location.href = `/create-campaign?duplicate=${campaign.id}`;
+                          }}
+                          className="text-purple-600 hover:text-purple-900 font-medium"
                         >
-                          Resume
+                          Duplicate
                         </button>
-                      )}
-                      
-                      {['draft', 'completed'].includes(campaign.status) && (
-                        <button
-                          onClick={() => handleDelete(campaign.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Delete
-                        </button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}

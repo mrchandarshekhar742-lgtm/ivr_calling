@@ -2,6 +2,7 @@ package com.ivrcallmanager.utils;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.provider.Settings;
 
 import java.util.UUID;
 
@@ -16,14 +17,22 @@ public class PreferenceManager {
     private static final String KEY_PHONE_NUMBER = "phone_number";
     private static final String KEY_SERVER_URL = "server_url";
     
+    // Current call tracking keys
+    private static final String KEY_CURRENT_CALL_ID = "current_call_id";
+    private static final String KEY_CURRENT_PHONE_NUMBER = "current_phone_number";
+    private static final String KEY_CURRENT_AUDIO_FILE_ID = "current_audio_file_id";
+    
     private SharedPreferences preferences;
+    private Context context;
     
     public PreferenceManager(Context context) {
+        this.context = context;
         preferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         
-        // Generate device ID if not exists
+        // Generate device ID if not exists - use consistent Android ID
         if (getDeviceId() == null) {
-            String deviceId = "device_" + UUID.randomUUID().toString().substring(0, 8);
+            String androidId = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
+            String deviceId = "DEVICE_" + androidId;
             preferences.edit().putString(KEY_DEVICE_ID, deviceId).apply();
         }
         
@@ -55,7 +64,9 @@ public class PreferenceManager {
     }
     
     public void generateNewDeviceId() {
-        String deviceId = "device_" + UUID.randomUUID().toString().substring(0, 8);
+        // Use consistent Android ID instead of random UUID
+        String androidId = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
+        String deviceId = "DEVICE_" + androidId;
         preferences.edit().putString(KEY_DEVICE_ID, deviceId).apply();
     }
     
@@ -75,6 +86,39 @@ public class PreferenceManager {
         SharedPreferences.Editor editor = preferences.edit();
         editor.putString(KEY_DEVICE_ID, deviceId);
         editor.putString(KEY_DEVICE_NAME, deviceName);
+        editor.apply();
+    }
+    
+    // Current call tracking methods
+    public void setCurrentCallId(String callId) {
+        preferences.edit().putString(KEY_CURRENT_CALL_ID, callId).apply();
+    }
+    
+    public void setCurrentPhoneNumber(String phoneNumber) {
+        preferences.edit().putString(KEY_CURRENT_PHONE_NUMBER, phoneNumber).apply();
+    }
+    
+    public void setCurrentAudioFileId(int audioFileId) {
+        preferences.edit().putInt(KEY_CURRENT_AUDIO_FILE_ID, audioFileId).apply();
+    }
+    
+    public String getCurrentCallId() {
+        return preferences.getString(KEY_CURRENT_CALL_ID, null);
+    }
+    
+    public String getCurrentPhoneNumber() {
+        return preferences.getString(KEY_CURRENT_PHONE_NUMBER, null);
+    }
+    
+    public int getCurrentAudioFileId() {
+        return preferences.getInt(KEY_CURRENT_AUDIO_FILE_ID, 0);
+    }
+    
+    public void clearCurrentCall() {
+        SharedPreferences.Editor editor = preferences.edit();
+        editor.remove(KEY_CURRENT_CALL_ID);
+        editor.remove(KEY_CURRENT_PHONE_NUMBER);
+        editor.remove(KEY_CURRENT_AUDIO_FILE_ID);
         editor.apply();
     }
     

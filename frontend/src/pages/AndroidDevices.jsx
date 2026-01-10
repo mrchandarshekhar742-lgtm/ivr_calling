@@ -1,123 +1,96 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../utils/api.js';
 import { toast } from 'react-hot-toast';
 
 const AndroidDevices = () => {
   const [showAddDevice, setShowAddDevice] = useState(false);
-  const [showTokenModal, setShowTokenModal] = useState(false);
-  const [selectedDevice, setSelectedDevice] = useState(null);
-  const [deviceForm, setDeviceForm] = useState({
-    deviceId: '',
-    deviceName: '',
-    androidVersion: '',
-    deviceModel: '',
-    appVersion: ''
-  });
-
   const queryClient = useQueryClient();
 
   // Fetch devices
-  const { data: devicesData, isLoading, error, refetch } = useQuery(
-    ['devices'],
-    () => api.get('/api/devices'),
-    { 
-      retry: (failureCount, error) => {
-        // Don't retry on authentication errors
-        if (error?.response?.status === 401 || error?.response?.status === 403) {
-          return false;
-        }
-        return failureCount < 1;
-      },
-      refetchOnWindowFocus: true,
-      refetchInterval: 30000, // Refresh every 30 seconds
-      onError: (error) => {
-        console.error('Error fetching devices:', error);
-        if (error?.response?.status !== 401) {
-          toast.error('Failed to load devices');
-        }
+  const { data: devicesData, isLoading, error, refetch } = useQuery({
+    queryKey: ['devices'],
+    queryFn: async () => {
+      console.log('🔍 Fetching devices...');
+      const token = localStorage.getItem('token');
+      console.log('🔑 Token exists:', !!token);
+      
+      try {
+        const response = await api.get('/api/devices');
+        console.log('✅ Devices API response:', response.data);
+        return response.data;
+      } catch (error) {
+        console.error('❌ Devices API error:', error);
+        console.error('❌ Error response:', error.response?.data);
+        throw error;
       }
+    },
+    refetchInterval: 5000, // Refresh every 5 seconds
+    retry: (failureCount, error) => {
+      // Don't retry auth errors
+      if (error?.response?.status === 401) return false;
+      return failureCount < 3;
     }
-  );
+  });
 
-  // Register device mutation
-  const registerDeviceMutation = useMutation(
-    (deviceData) => api.post('/api/devices/register', deviceData),
-    {
-      onSuccess: (response) => {
-        toast.success('Device registered successfully!');
-        queryClient.invalidateQueries('devices');
-        setShowAddDevice(false);
-        setDeviceForm({ deviceId: '', deviceName: '', androidVersion: '', deviceModel: '', appVersion: '' });
-        
-        // Show token modal with device info
-        setSelectedDevice(response.data.data);
-        setShowTokenModal(true);
-      },
-      onError: (error) => {
-        toast.error(error.response?.data?.message || 'Failed to register device');
+  // Fetch device stats
+  const { data: statsData } = useQuery({
+    queryKey: ['device-stats'],
+    queryFn: async () => {
+      console.log('📊 Fetching device stats...');
+      try {
+        const response = await api.get('/api/devices/stats/summary');
+        console.log('✅ Stats API response:', response.data);
+        return response.data;
+      } catch (error) {
+        console.error('❌ Stats API error:', error);
+        throw error;
       }
+    },
+    refetchInterval: 10000, // Refresh every 10 seconds
+    retry: (failureCount, error) => {
+      if (error?.response?.status === 401) return false;
+      return failureCount < 3;
     }
-  );
-
-  // Remove device mutation
-  const removeDeviceMutation = useMutation(
-    (deviceId) => api.delete(`/api/devices/${deviceId}`),
-    {
-      onSuccess: () => {
-        toast.success('Device removed successfully!');
-        queryClient.invalidateQueries('devices');
-      },
-      onError: (error) => {
-        toast.error(error.response?.data?.message || 'Failed to remove device');
-      }
-    }
-  );
-
-  // Test device mutation
-  const testDeviceMutation = useMutation(
-    (deviceId) => api.post(`/api/devices/${deviceId}/test`),
-    {
-      onSuccess: (response) => {
-        toast.success(response.data.message || 'Device test successful!');
-        queryClient.invalidateQueries('devices');
-      },
-      onError: (error) => {
-        toast.error(error.response?.data?.message || 'Device test failed');
-      }
-    }
-  );
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!deviceForm.deviceId || !deviceForm.deviceName) {
-      toast.error('Device ID and Name are required');
-      return;
-    }
-    registerDeviceMutation.mutate(deviceForm);
-  };
-
-  const handleRemoveDevice = (deviceId, deviceName) => {
-    if (window.confirm(`Are you sure you want to remove "${deviceName}"?`)) {
-      removeDeviceMutation.mutate(deviceId);
-    }
-  };
-
-  const handleTestDevice = (deviceId) => {
-    testDeviceMutation.mutate(deviceId);
-  };
-
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    toast.success('Copied to clipboard!');
-  };
+  });
 
   const devices = devicesData?.data?.devices || [];
-  
-  // Filter to show only online devices
-  const onlineDevices = devices.filter(device => 
-    device.status === 'online' || device.status === 'active'
-  );
+  const stats = statsData?.data || {};
+
+  // Debug information
+  const debugInfo = {
+    isLoading,
+    error: error?.message,
+    errorStatus: error?.response?.status,
+    devicesDataExists: !!devicesData,
+    devicesCount: devices.length,
+    token: !!localStorage.getItem('token'),
+    apiBaseURL: api.defaults.baseURL
+  };
+
+  console.log('🐛 Debug Info:', debugInfo);
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'online': return 'bg-green-100 text-green-800';
+      case 'busy': return 'bg-yellow-100 text-yellow-800';
+      case 'offline': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatLastSeen = (lastSeen) => {
+    if (!lastSeen) return 'Never';
+    const date = new Date(lastSeen);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+    return date.toLocaleDateString();
+  };
 
   if (isLoading) {
     return (
@@ -129,14 +102,19 @@ const AndroidDevices = () => {
 
   if (error) {
     return (
-      <div className="flex flex-col justify-center items-center h-64">
-        <div className="text-red-500 text-xl mb-4">❌ Error loading devices</div>
-        <p className="text-gray-600 mb-4">{error.message}</p>
-        <button 
+      <div className="text-center py-12">
+        <div className="text-red-600 mb-4">
+          <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to load devices</h3>
+        <p className="text-gray-600 mb-4">There was an error loading your Android devices.</p>
+        <button
           onClick={() => refetch()}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
         >
-          Retry
+          Try Again
         </button>
       </div>
     );
@@ -147,203 +125,141 @@ const AndroidDevices = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Online Android Devices</h1>
-          <p className="text-gray-600">
-            Connected devices ready for IVR calling ({onlineDevices.length} online)
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">Android Devices</h1>
+          <p className="text-gray-600">Manage your connected Android devices for IVR calling</p>
         </div>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => refetch()}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-          >
-            🔄 Refresh
-          </button>
-          <button
-            onClick={() => setShowAddDevice(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Add Device
-          </button>
+        <button
+          onClick={() => {
+            refetch();
+            // Also invalidate CreateCampaign devices query
+            queryClient.invalidateQueries(['devices']);
+          }}
+          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
+        >
+          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Refresh
+        </button>
+      </div>
+
+      {/* Debug Panel - Temporary for troubleshooting */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+        <h3 className="text-sm font-medium text-yellow-800 mb-2">Debug Information</h3>
+        <div className="grid grid-cols-2 gap-4 text-xs text-yellow-700">
+          <div>Loading: {isLoading ? 'Yes' : 'No'}</div>
+          <div>Token: {debugInfo.token ? 'Present' : 'Missing'}</div>
+          <div>Error: {debugInfo.error || 'None'}</div>
+          <div>Status: {debugInfo.errorStatus || 'OK'}</div>
+          <div>Data: {debugInfo.devicesDataExists ? 'Present' : 'Missing'}</div>
+          <div>Count: {debugInfo.devicesCount}</div>
+        </div>
+        <div className="mt-2 text-xs text-yellow-600">
+          API: {debugInfo.apiBaseURL}
         </div>
       </div>
 
-      {/* Device Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center">
-            <div className="text-green-600 text-2xl mr-3">🟢</div>
-            <div>
-              <p className="text-sm font-medium text-green-900">Online Devices</p>
-              <p className="text-2xl font-bold text-green-700">{onlineDevices.length}</p>
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Total Devices</p>
+              <p className="text-2xl font-semibold text-gray-900">{stats.totalDevices || 0}</p>
             </div>
           </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Online</p>
+              <p className="text-2xl font-semibold text-green-600">{stats.onlineDevices || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Busy</p>
+              <p className="text-2xl font-semibold text-yellow-600">{stats.busyDevices || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728" />
+                </svg>
+              </div>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Offline</p>
+              <p className="text-2xl font-semibold text-red-600">{stats.offlineDevices || 0}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Devices List */}
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-medium text-gray-900">Connected Devices</h2>
         </div>
         
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <div className="text-gray-600 text-2xl mr-3">📱</div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">Total Devices</p>
-              <p className="text-2xl font-bold text-gray-700">{devices.length}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <div className="text-blue-600 text-2xl mr-3">📞</div>
-            <div>
-              <p className="text-sm font-medium text-blue-900">Ready for Calls</p>
-              <p className="text-2xl font-bold text-blue-700">{onlineDevices.length}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Add Device Modal */}
-      {showAddDevice && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Add Android Device</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Device ID *
-                </label>
-                <input
-                  type="text"
-                  value={deviceForm.deviceId}
-                  onChange={(e) => setDeviceForm({ ...deviceForm, deviceId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter unique device ID"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Device Name *
-                </label>
-                <input
-                  type="text"
-                  value={deviceForm.deviceName}
-                  onChange={(e) => setDeviceForm({ ...deviceForm, deviceName: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., Samsung Galaxy S21"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Device Model
-                </label>
-                <input
-                  type="text"
-                  value={deviceForm.deviceModel}
-                  onChange={(e) => setDeviceForm({ ...deviceForm, deviceModel: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., SM-G991B"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Android Version
-                </label>
-                <input
-                  type="text"
-                  value={deviceForm.androidVersion}
-                  onChange={(e) => setDeviceForm({ ...deviceForm, androidVersion: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., Android 12"
-                />
-              </div>
-              <div className="flex space-x-3 pt-4">
-                <button
-                  type="submit"
-                  disabled={registerDeviceMutation.isLoading}
-                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {registerDeviceMutation.isLoading ? 'Adding...' : 'Add Device'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAddDevice(false)}
-                  className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Token Modal */}
-      {showTokenModal && selectedDevice && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
-            <h2 className="text-xl font-bold mb-4">🎉 Device Registered Successfully!</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Device Token (Copy this to your Android app):
-                </label>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    value={selectedDevice.token}
-                    readOnly
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
-                  />
-                  <button
-                    onClick={() => copyToClipboard(selectedDevice.token)}
-                    className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Copy
-                  </button>
-                </div>
-              </div>
-              
-              <div className="bg-gray-50 rounded-lg p-3">
-                <h4 className="font-medium text-gray-900 mb-2">Device Information:</h4>
-                <div className="text-sm text-gray-600 space-y-1">
-                  <p><strong>Name:</strong> {selectedDevice.deviceName}</p>
-                  <p><strong>ID:</strong> {selectedDevice.deviceId}</p>
-                  <p><strong>Server URL:</strong> {selectedDevice.instructions?.serverUrl}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex justify-end pt-4">
+        {devices.length === 0 ? (
+          <div className="text-center py-12">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No devices connected</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Install the IVR Manager app on your Android device and connect to get started.
+            </p>
+            <div className="mt-6">
               <button
-                onClick={() => setShowTokenModal(false)}
-                className="bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = '/ivr-manager-latest.apk';
+                  link.download = 'ivr-manager-latest.apk';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  toast.success('APK download started');
+                }}
+                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
               >
-                Close
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Download APK
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Online Devices List */}
-      <div className="bg-white rounded-lg shadow">
-        {onlineDevices.length === 0 ? (
-          <div className="p-8 text-center">
-            <div className="text-gray-400 text-6xl mb-4">📱</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No devices online</h3>
-            <p className="text-gray-600 mb-4">
-              {devices.length === 0 
-                ? "Connect your Android device to start making IVR calls"
-                : `You have ${devices.length} device(s) registered, but none are currently online`
-              }
-            </p>
-            <button
-              onClick={() => setShowAddDevice(true)}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              {devices.length === 0 ? 'Add First Device' : 'Add Another Device'}
-            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -360,46 +276,80 @@ const AndroidDevices = () => {
                     Last Seen
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Performance
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {onlineDevices.map((device) => (
-                  <tr key={device.deviceId} className="hover:bg-green-50">
+                {devices.map((device) => (
+                  <tr key={device.deviceId}>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {device.deviceName}
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
+                          <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                            <svg className="h-6 w-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-500">
-                          ID: {device.deviceId}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {device.deviceModel} • {device.androidVersion}
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{device.deviceName}</div>
+                          <div className="text-sm text-gray-500">{device.deviceId}</div>
+                          <div className="text-xs text-gray-400">
+                            {device.deviceModel} • Android {device.androidVersion}
+                          </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">
-                        🟢 Online & Ready
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(device.status)}`}>
+                        {device.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {device.lastSeen ? new Date(device.lastSeen).toLocaleString() : 'Just now'}
+                      {formatLastSeen(device.lastSeen)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div className="text-xs">
+                        <div>Calls: {device.stats?.totalCalls || 0}</div>
+                        <div>Success: {device.stats?.successfulCalls || 0}</div>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button 
-                        onClick={() => handleTestDevice(device.deviceId)}
-                        disabled={testDeviceMutation.isLoading}
-                        className="text-green-600 hover:text-green-900 mr-3 disabled:opacity-50"
+                      <button
+                        className="text-blue-600 hover:text-blue-900 mr-3"
+                        onClick={async () => {
+                          try {
+                            console.log(`Testing device: ${device.deviceId}`);
+                            const response = await api.post(`/api/devices/${device.deviceId}/test`);
+                            console.log('Test response:', response.data);
+                            toast.success(`Test signal sent to ${device.deviceName}`);
+                          } catch (error) {
+                            console.error('Test error:', error);
+                            const errorMessage = error.response?.data?.message || error.message || 'Test failed';
+                            toast.error(`Test failed: ${errorMessage}`);
+                          }
+                        }}
                       >
-                        Test Connection
+                        Test
                       </button>
-                      <button 
-                        onClick={() => handleRemoveDevice(device.deviceId, device.deviceName)}
-                        disabled={removeDeviceMutation.isLoading}
-                        className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                      <button
+                        className="text-red-600 hover:text-red-900"
+                        onClick={async () => {
+                          if (window.confirm('Are you sure you want to remove this device?')) {
+                            try {
+                              await api.delete(`/api/devices/${device.deviceId}`);
+                              toast.success('Device removed');
+                              refetch();
+                            } catch (error) {
+                              console.error('Remove error:', error);
+                              toast.error(`Failed to remove device: ${error.response?.data?.message || error.message}`);
+                            }
+                          }
+                        }}
                       >
                         Remove
                       </button>
@@ -410,6 +360,48 @@ const AndroidDevices = () => {
             </table>
           </div>
         )}
+      </div>
+
+      {/* Instructions */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-blue-800">How to connect your Android device</h3>
+            <div className="mt-2 text-sm text-blue-700">
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Download and install the IVR Manager APK on your Android device</li>
+                <li>Open the app and login with your account credentials</li>
+                <li>Tap "Connect to Server" to register your device</li>
+                <li>Your device will appear in this list as "Online" when connected</li>
+                <li>You can now use this device for IVR calling campaigns</li>
+              </ol>
+            </div>
+            <div className="mt-4">
+              <button
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = '/ivr-manager-latest.apk';
+                  link.download = 'ivr-manager-latest.apk';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  toast.success('APK download started');
+                }}
+                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Download IVR Manager APK
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

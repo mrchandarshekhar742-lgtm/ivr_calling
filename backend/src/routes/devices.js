@@ -187,20 +187,30 @@ router.post('/register', auth, [
 });
 
 // @route   GET /api/devices
+// @route   GET /api/devices
 // @desc    Get all registered Android devices for current user
 // @access  Private
 router.get('/', auth, async (req, res) => {
   try {
+    logger.info(`Getting devices for user ID: ${req.user.id}, email: ${req.user.email}`);
+    
     const userDevices = await Device.findAll({
       where: { userId: req.user.id },
       order: [['lastSeen', 'DESC']]
     });
+
+    logger.info(`Found ${userDevices.length} devices for user ${req.user.id}`);
 
     const devicesWithTokenPreview = userDevices.map(device => ({
       ...device.toJSON(),
       // Don't expose full token in list
       tokenPreview: device.token ? `${device.token.substring(0, 8)}...` : null
     }));
+
+    // Also log device details for debugging
+    devicesWithTokenPreview.forEach(device => {
+      logger.info(`Device: ${device.deviceId}, Status: ${device.status}, LastSeen: ${device.lastSeen}`);
+    });
 
     res.json({
       success: true,
@@ -331,6 +341,112 @@ router.delete('/:deviceId', auth, async (req, res) => {
     });
   } catch (error) {
     logger.error('Remove device error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   GET /api/devices/:deviceId/commands
+// @desc    Get pending call commands for device
+// @access  Private
+router.get('/:deviceId/commands', auth, async (req, res) => {
+  try {
+    const device = await Device.findOne({
+      where: { 
+        deviceId: req.params.deviceId,
+        userId: req.user.id 
+      }
+    });
+    
+    if (!device) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device not found'
+      });
+    }
+
+    // Update last seen
+    device.lastSeen = new Date();
+    await device.save();
+
+    // Check for pending call commands
+    const pendingCommands = device.pendingCommands || device.dataValues.pending_commands || [];
+    
+    // Clear pending commands after sending
+    if (pendingCommands.length > 0) {
+      device.pendingCommands = [];
+      await device.save();
+    }
+
+    res.json(pendingCommands.length > 0 ? pendingCommands[0] : {});
+  } catch (error) {
+    logger.error('Get device commands error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   POST /api/devices/:deviceId/send-command
+// @desc    Send command to device
+// @access  Private
+router.post('/:deviceId/send-command', auth, [
+  body('action').isIn(['make_call', 'stop_call', 'test']),
+  body('phoneNumber').optional().trim(),
+  body('callId').optional().trim(),
+  body('audioFileId').optional().isInt()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid input',
+        errors: errors.array()
+      });
+    }
+
+    const device = await Device.findOne({
+      where: { 
+        deviceId: req.params.deviceId,
+        userId: req.user.id 
+      }
+    });
+    
+    if (!device) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device not found'
+      });
+    }
+
+    const command = {
+      action: req.body.action,
+      phoneNumber: req.body.phoneNumber,
+      callId: req.body.callId,
+      audioFileId: req.body.audioFileId,
+      timestamp: new Date().toISOString(),
+      deviceId: req.params.deviceId
+    };
+
+    // Store command in device's pending commands
+    const pendingCommands = device.pendingCommands || [];
+    pendingCommands.push(command);
+    device.pendingCommands = pendingCommands;
+    await device.save();
+
+    logger.info(`Command sent to device ${req.params.deviceId}: ${req.body.action}`);
+
+    res.json({
+      success: true,
+      message: 'Command sent to device',
+      data: command
+    });
+  } catch (error) {
+    logger.error('Send device command error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

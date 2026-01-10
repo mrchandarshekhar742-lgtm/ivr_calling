@@ -50,7 +50,7 @@ router.get('/', auth, async (req, res) => {
 // @access  Private
 router.post('/', auth, [
   body('name').trim().isLength({ min: 2, max: 100 }),
-  body('phone').isMobilePhone(),
+  body('phone').isLength({ min: 10, max: 15 }).matches(/^\d+$/),
   body('email').optional().isEmail(),
   body('campaignId').optional().isInt()
 ], async (req, res) => {
@@ -110,9 +110,10 @@ router.post('/', auth, [
     });
   } catch (error) {
     logger.error('Create contact error:', error);
+    console.error('Full error details:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error: ' + error.message
     });
   }
 });
@@ -123,7 +124,7 @@ router.post('/', auth, [
 router.post('/bulk', auth, [
   body('contacts').isArray({ min: 1 }),
   body('contacts.*.name').trim().isLength({ min: 2, max: 100 }),
-  body('contacts.*.phone').isMobilePhone(),
+  body('contacts.*.phone').isLength({ min: 10, max: 15 }).matches(/^\d+$/),
   body('contacts.*.email').optional().isEmail()
 ], async (req, res) => {
   try {
@@ -201,32 +202,29 @@ router.post('/bulk', auth, [
 // @route   POST /api/contacts/bulk-text
 // @desc    Bulk import contacts from text numbers
 // @access  Private
-router.post('/bulk-text', auth, [
-  body('numbers').isString().withMessage('Numbers must be a string')
-], async (req, res) => {
+router.post('/bulk-text', auth, async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
+    const { numbers } = req.body;
+    
+    if (!numbers || typeof numbers !== 'string' || numbers.trim().length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid input',
-        errors: errors.array()
+        message: 'Numbers field is required and must be a string'
       });
     }
-
-    const { numbers } = req.body;
     
     // Parse numbers from text (split by newlines, commas, or spaces)
     const phoneNumbers = numbers
       .split(/[\n,\s]+/)
       .map(num => num.trim())
       .filter(num => num.length > 0)
-      .filter(num => /^\d{10,15}$/.test(num)); // Basic phone validation
+      .map(num => num.replace(/[^\d]/g, '')) // Remove non-digits
+      .filter(num => num.length >= 10 && num.length <= 15); // Valid phone length
 
     if (phoneNumbers.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'No valid phone numbers found'
+        message: 'No valid phone numbers found. Please enter 10-15 digit phone numbers.'
       });
     }
 
@@ -275,9 +273,10 @@ router.post('/bulk-text', auth, [
     });
   } catch (error) {
     logger.error('Bulk text import error:', error);
+    console.error('Full bulk-text error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error: ' + error.message
     });
   }
 });
@@ -322,7 +321,7 @@ router.get('/:id', auth, async (req, res) => {
 // @access  Private
 router.put('/:id', auth, [
   body('name').optional().trim().isLength({ min: 2, max: 100 }),
-  body('phone').optional().isMobilePhone(),
+  body('phone').optional().isLength({ min: 10, max: 15 }).matches(/^\d+$/),
   body('email').optional().isEmail(),
   body('campaignId').optional().isInt()
 ], async (req, res) => {

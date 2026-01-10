@@ -80,6 +80,22 @@ router.post('/', auth, upload.single('audio'), async (req, res) => {
       });
     }
 
+    // Calculate estimated duration based on file size and type
+    let estimatedDuration = 10; // Default 10 seconds
+    if (req.file.mimetype.includes('mp3') || req.file.mimetype.includes('mpeg')) {
+      // MP3: roughly 1MB per minute at 128kbps
+      estimatedDuration = Math.round((req.file.size / 1024 / 1024) * 60);
+    } else if (req.file.mimetype.includes('wav')) {
+      // WAV: roughly 10MB per minute at 44.1kHz 16-bit stereo
+      estimatedDuration = Math.round((req.file.size / 1024 / 1024) * 6);
+    } else {
+      // Other formats: estimate based on size
+      estimatedDuration = Math.round((req.file.size / 1024 / 1024) * 30);
+    }
+    
+    // Ensure minimum 1 second, maximum 600 seconds (10 minutes)
+    estimatedDuration = Math.max(1, Math.min(600, estimatedDuration));
+
     // Create audio file record in database
     const audioFile = await AudioFile.create({
       name: name.trim(),
@@ -87,6 +103,7 @@ router.post('/', auth, upload.single('audio'), async (req, res) => {
       data: req.file.buffer, // Store file data as BLOB
       mimeType: req.file.mimetype,
       size: req.file.size,
+      duration: estimatedDuration,
       category,
       description: description || '',
       tags: [],
