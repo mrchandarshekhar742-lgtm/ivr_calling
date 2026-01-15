@@ -6,6 +6,8 @@ const CallLog = require('./CallLog');
 const CallTemplate = require('./CallTemplate');
 const CallSchedule = require('./CallSchedule');
 const Device = require('./Device');
+const IVRFlow = require('./IVRFlow');
+const IVRNode = require('./IVRNode');
 
 // Define associations
 User.hasMany(Campaign, { foreignKey: 'createdBy', as: 'campaigns' });
@@ -49,6 +51,19 @@ CallSchedule.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
 Campaign.hasMany(CallSchedule, { foreignKey: 'campaignId', as: 'schedules' });
 CallSchedule.belongsTo(Campaign, { foreignKey: 'campaignId', as: 'campaign' });
 
+// IVR Flow associations
+User.hasMany(IVRFlow, { foreignKey: 'userId', as: 'ivrFlows' });
+IVRFlow.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+IVRFlow.hasMany(IVRNode, { foreignKey: 'flowId', as: 'nodes' });
+IVRNode.belongsTo(IVRFlow, { foreignKey: 'flowId', as: 'flow' });
+
+IVRNode.belongsTo(AudioFile, { foreignKey: 'audioFileId', as: 'audioFile' });
+AudioFile.hasMany(IVRNode, { foreignKey: 'audioFileId', as: 'ivrNodes' });
+
+CallLog.belongsTo(IVRFlow, { foreignKey: 'ivrFlowId', as: 'ivrFlow' });
+IVRFlow.hasMany(CallLog, { foreignKey: 'ivrFlowId', as: 'callLogs' });
+
 module.exports = {
   User,
   Campaign,
@@ -57,5 +72,7 @@ module.exports = {
   CallLog,
   CallTemplate,
   CallSchedule,
-  Device
+  Device,
+  IVRFlow,
+  IVRNode
 };

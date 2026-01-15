@@ -77,19 +77,7 @@ const Device = sequelize.define('Device', {
     field: 'pending_commands'  // Map to database column name
   }
 }, {
-  tableName: 'devices',
-  indexes: [
-    {
-      unique: true,
-      fields: ['deviceId']
-    },
-    {
-      fields: ['userId']
-    },
-    {
-      fields: ['status']
-    }
-  ]
+  tableName: 'devices'
 });
 
 // Instance methods

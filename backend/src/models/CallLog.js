@@ -69,6 +69,29 @@ const CallLog = sequelize.define('CallLog', {
     type: DataTypes.TEXT,
     allowNull: true
   },
+  ivrFlowId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'ivr_flows',
+      key: 'id'
+    }
+  },
+  ivrPath: {
+    type: DataTypes.JSON,
+    defaultValue: [],
+    comment: 'Array of nodes visited: [{nodeKey, dtmfPressed, timestamp}]'
+  },
+  dtmfResponses: {
+    type: DataTypes.JSON,
+    defaultValue: [],
+    comment: 'All DTMF inputs during call with timestamps'
+  },
+  currentNodeKey: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Current IVR node the call is at'
+  },
   metadata: {
     type: DataTypes.JSON,
     defaultValue: {}

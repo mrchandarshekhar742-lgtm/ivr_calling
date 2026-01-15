@@ -27,6 +27,7 @@ const analyticsRoutes = require('./src/routes/analytics');
 const templateRoutes = require('./src/routes/templates');
 const scheduleRoutes = require('./src/routes/schedules');
 const callLogRoutes = require('./src/routes/callLogs');
+const ivrFlowRoutes = require('./src/routes/ivrFlows');
 
 const app = express();
 const server = http.createServer(app);
@@ -120,6 +121,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/schedules', scheduleRoutes);
 app.use('/api/call-logs', callLogRoutes);
+app.use('/api/ivr-flows', ivrFlowRoutes);
 
 /* ================================
    404 HANDLER (JSON ONLY)

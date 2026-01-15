@@ -267,7 +267,7 @@ const Campaigns = () => {
                         )}
                         
                         {/* Delete button - for draft, completed, cancelled campaigns */}
-                        {['draft', 'completed', 'cancelled', 'stopped'].includes(campaign.status) && (
+                        {['draft', 'completed', 'cancelled', 'failed'].includes(campaign.status) && (
                           <button
                             onClick={() => handleDelete(campaign.id)}
                             className="text-red-600 hover:text-red-900 font-medium"

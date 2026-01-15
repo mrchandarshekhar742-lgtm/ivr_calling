@@ -223,7 +223,7 @@ const CallLogs = () => {
         </div>
       </div>
 
-      {/* Call Logs Table */}
+      {/* Enhanced Call Logs Table with DTMF and Audio Tracking */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {callLogs.length === 0 ? (
           <div className="text-center py-12">
@@ -233,24 +233,54 @@ const CallLogs = () => {
           </div>
         ) : (
           <>
+            {/* Summary Stats */}
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold text-blue-600">
+                    {callLogs.filter(log => log.status === 'completed').length}
+                  </div>
+                  <div className="text-sm text-gray-600">Completed Calls</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-green-600">
+                    {callLogs.filter(log => log.dtmfResponse && log.dtmfResponse !== 'No Response').length}
+                  </div>
+                  <div className="text-sm text-gray-600">DTMF Responses</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-purple-600">
+                    {callLogs.filter(log => log.audioDelivered === true).length}
+                  </div>
+                  <div className="text-sm text-gray-600">Audio Delivered</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-orange-600">
+                    {Math.round(callLogs.filter(log => log.dtmfResponse && log.dtmfResponse !== 'No Response').length / Math.max(callLogs.length, 1) * 100)}%
+                  </div>
+                  <div className="text-sm text-gray-600">Response Rate</div>
+                </div>
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Contact
+                      Contact & Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Campaign
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Duration
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       DTMF Response
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Audio Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Called At
@@ -271,6 +301,9 @@ const CallLogs = () => {
                               {log.contact?.name || 'Unknown'}
                             </div>
                             <div className="text-sm text-gray-500">{log.phoneNumber}</div>
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadge(log.status)}`}>
+                              {log.status.replace('-', ' ')}
+                            </span>
                           </div>
                         </div>
                       </td>
@@ -282,28 +315,66 @@ const CallLogs = () => {
                           {log.campaign?.type || 'N/A'}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadge(log.status)}`}>
-                          {log.status.replace('-', ' ')}
-                        </span>
-                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDuration(log.duration)}
+                        <div className="flex flex-col">
+                          <span className="font-medium">{formatDuration(log.duration)}</span>
+                          {log.answered && (
+                            <span className="text-xs text-green-600">✓ Answered</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {log.dtmfResponse ? (
-                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                            {log.dtmfResponse}
-                          </span>
+                        {log.dtmfResponse && log.dtmfResponse !== 'No Response' ? (
+                          <div className="flex flex-col">
+                            <span className="inline-flex px-3 py-1 text-sm font-bold rounded-full bg-blue-100 text-blue-800 border-2 border-blue-300">
+                              Key: {log.dtmfResponse}
+                            </span>
+                            <span className="text-xs text-green-600 mt-1">✓ Response Recorded</span>
+                          </div>
                         ) : (
-                          <span className="text-sm text-gray-500">None</span>
+                          <div className="flex flex-col">
+                            <span className="text-sm text-gray-500">No Response</span>
+                            <span className="text-xs text-gray-400">No button pressed</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {log.audioDelivered ? (
+                          <div className="flex flex-col">
+                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                              ✓ Delivered
+                            </span>
+                            <span className="text-xs text-gray-500">Audio played to target</span>
+                          </div>
+                        ) : log.campaign?.audioFileId ? (
+                          <div className="flex flex-col">
+                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                              ⚠ Failed
+                            </span>
+                            <span className="text-xs text-gray-500">Audio not delivered</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col">
+                            <span className="text-sm text-gray-500">No Audio</span>
+                            <span className="text-xs text-gray-400">Campaign has no audio</span>
+                          </div>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDate(log.calledAt)}
+                        <div className="flex flex-col">
+                          <span>{formatDate(log.calledAt)}</span>
+                          {log.notes && (
+                            <span className="text-xs text-gray-500 mt-1">{log.notes}</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {log.deviceId || 'N/A'}
+                        <div className="flex flex-col">
+                          <span className="font-medium">{log.deviceId || 'N/A'}</span>
+                          {log.device?.deviceName && (
+                            <span className="text-xs text-gray-400">{log.device.deviceName}</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

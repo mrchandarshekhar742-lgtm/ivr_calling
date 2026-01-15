@@ -25,11 +25,37 @@ const CreateCampaign = () => {
     }
   });
 
-  // Fetch audio files
-  const { data: audioData, isLoading: audioLoading } = useQuery({
+  // Fetch audio files with enhanced error handling
+  const { data: audioData, isLoading: audioLoading, error: audioError } = useQuery({
     queryKey: ['audio-files'],
-    queryFn: () => api.get('/api/audio'),
-    retry: 2
+    queryFn: async () => {
+      console.log('🎵 CreateCampaign: Fetching audio files...');
+      const token = localStorage.getItem('token');
+      console.log('🔑 CreateCampaign: Audio Token exists:', !!token);
+      
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      try {
+        const response = await api.get('/api/audio');
+        console.log('✅ CreateCampaign: Audio API response:', response.data);
+        console.log('✅ CreateCampaign: Audio files array:', response.data?.data?.audioFiles);
+        return response.data;
+      } catch (error) {
+        console.error('❌ CreateCampaign: Audio API error:', error);
+        console.error('❌ CreateCampaign: Audio Error response:', error.response?.data);
+        console.error('❌ CreateCampaign: Audio Error status:', error.response?.status);
+        throw error;
+      }
+    },
+    retry: (failureCount, error) => {
+      // Don't retry auth errors
+      if (error?.response?.status === 401) return false;
+      return failureCount < 2;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    cacheTime: 10 * 60 * 1000 // 10 minutes
   });
 
   // Fetch online devices (EXACTLY same as AndroidDevices page)
@@ -65,36 +91,56 @@ const CreateCampaign = () => {
     retry: 2
   });
 
-  const audioFiles = audioData?.data?.audioFiles || audioData?.data || [];
-  const devices = devicesData?.data?.devices || [];
+  // Safe array extraction with proper null checks
+  const audioFiles = audioData?.success && audioData?.data?.audioFiles 
+    ? audioData.data.audioFiles 
+    : [];
+    
+  const devices = Array.isArray(devicesData?.data?.devices) 
+    ? devicesData.data.devices 
+    : Array.isArray(devicesData?.data) 
+    ? devicesData.data 
+    : [];
   
-  // Direct online devices filtering - no complex state management
-  const onlineDevices = devices.filter(device => device.status === 'online');
-  const contacts = contactsData?.data?.contacts || contactsData?.data || [];
+  const contacts = Array.isArray(contactsData?.data?.contacts) 
+    ? contactsData.data.contacts 
+    : Array.isArray(contactsData?.data) 
+    ? contactsData.data 
+    : [];
 
-  // Enhanced debug logging
-  console.log('🔍 CreateCampaign Debug Info:', {
-    devicesDataRaw: devicesData,
-    devicesDataPath: devicesData?.data,
-    totalDevices: devices.length,
-    onlineDevices: onlineDevices.length,
-    allDeviceStatuses: devices.map(d => ({ 
-      id: d.deviceId, 
-      name: d.deviceName, 
-      status: d.status,
-      lastSeen: d.lastSeen 
-    })),
-    onlineDevicesList: onlineDevices.map(d => ({ 
-      id: d.deviceId, 
-      name: d.deviceName, 
-      status: d.status 
-    }))
-  });
+  // Filter online devices safely
+  const onlineDevices = Array.isArray(devices) 
+    ? devices.filter(device => device && device.status === 'online')
+    : [];
 
-  // Ensure arrays are always arrays
+  // Final safe arrays for UI
   const safeAudioFiles = Array.isArray(audioFiles) ? audioFiles : [];
   const safeOnlineDevices = Array.isArray(onlineDevices) ? onlineDevices : [];
   const safeContacts = Array.isArray(contacts) ? contacts : [];
+
+  // Enhanced debug logging with safe array access
+  console.log('🔍 CreateCampaign Debug Info:', {
+    audioDataRaw: audioData,
+    audioError: audioError?.message,
+    audioErrorStatus: audioError?.response?.status,
+    audioFilesPath: audioData?.data?.audioFiles,
+    audioFilesCount: safeAudioFiles.length,
+    devicesDataRaw: devicesData,
+    devicesDataPath: devicesData?.data,
+    totalDevices: devices.length,
+    onlineDevices: safeOnlineDevices.length,
+    allDeviceStatuses: devices.map(d => ({ 
+      id: d?.deviceId, 
+      name: d?.deviceName, 
+      status: d?.status,
+      lastSeen: d?.lastSeen 
+    })),
+    onlineDevicesList: safeOnlineDevices.map(d => ({ 
+      id: d?.deviceId, 
+      name: d?.deviceName, 
+      status: d?.status 
+    }))
+  });
 
   // Show loading spinner while data is loading
   if (audioLoading || devicesLoading || contactsLoading) {
@@ -180,14 +226,26 @@ const CreateCampaign = () => {
       // Create campaign
       const campaignData = {
         ...formData,
+        audioFileId: formData.audioFileId ? parseInt(formData.audioFileId) : null, // Convert to integer
         contactNumbers: numbers,
         selectedDevices: selectedDevices,
         totalContacts: numbers.length,
         devicesUsed: selectedDevices.length
       };
 
+      console.log('🚀 Sending campaign data:', JSON.stringify(campaignData, null, 2));
+      console.log('🔍 Campaign data structure:', {
+        name: campaignData.name,
+        type: campaignData.type,
+        audioFileId: campaignData.audioFileId,
+        audioFileIdType: typeof campaignData.audioFileId,
+        contactNumbers: campaignData.contactNumbers?.length,
+        selectedDevices: campaignData.selectedDevices?.length,
+        settings: campaignData.settings
+      });
+
       const response = await api.post('/api/campaigns', campaignData);
-      console.log('Campaign created:', response.data);
+      console.log('✅ Campaign created:', response.data);
       
       // Handle different response structures
       const createdCampaign = response.data.data || response.data;
@@ -202,7 +260,12 @@ const CreateCampaign = () => {
       }
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to create campaign');
-      console.error('Create campaign error:', err);
+      console.error('❌ Create campaign error:', err);
+      console.error('❌ Error response:', err.response?.data);
+      console.error('❌ Error status:', err.response?.status);
+      if (err.response?.data?.errors) {
+        console.error('❌ Validation errors:', err.response.data.errors);
+      }
     } finally {
       setLoading(false);
     }
@@ -237,6 +300,7 @@ const CreateCampaign = () => {
               queryClient.invalidateQueries(['devices']);
               queryClient.invalidateQueries(['audio-files']);
               queryClient.invalidateQueries(['contacts']);
+              toast.success('Refreshing all data...');
             }}
             className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center"
           >
@@ -250,19 +314,64 @@ const CreateCampaign = () => {
 
       {/* Enhanced Debug Panel - Temporary for troubleshooting */}
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-        <h3 className="text-sm font-medium text-yellow-800 mb-2">Device Debug Information</h3>
-        <div className="grid grid-cols-2 gap-4 text-xs text-yellow-700">
-          <div>Total Devices: {devices.length}</div>
-          <div>Online Devices: {safeOnlineDevices.length}</div>
-          <div>Loading: {devicesLoading ? 'Yes' : 'No'}</div>
-          <div>Data Exists: {!!devicesData ? 'Yes' : 'No'}</div>
-          <div>API Response: {devicesData ? 'Success' : 'Failed'}</div>
-          <div>Query Key: ['devices']</div>
+        <h3 className="text-sm font-medium text-yellow-800 mb-2">Debug Information</h3>
+        <div className="grid grid-cols-3 gap-4 text-xs text-yellow-700">
+          <div>
+            <p className="font-medium">Devices:</p>
+            <p>Total: {devices.length}</p>
+            <p>Online: {safeOnlineDevices.length}</p>
+            <p>Loading: {devicesLoading ? 'Yes' : 'No'}</p>
+          </div>
+          <div>
+            <p className="font-medium">Audio Files:</p>
+            <p>Total: {safeAudioFiles.length}</p>
+            <p>Loading: {audioLoading ? 'Yes' : 'No'}</p>
+            <p>Data: {audioData ? 'Success' : 'Failed'}</p>
+            {audioError && (
+              <p className="text-red-600">Error: {audioError.message}</p>
+            )}
+          </div>
+          <div>
+            <p className="font-medium">Contacts:</p>
+            <p>Total: {safeContacts.length}</p>
+            <p>Loading: {contactsLoading ? 'Yes' : 'No'}</p>
+          </div>
         </div>
+        
+        {/* Audio Files Debug */}
+        {safeAudioFiles.length > 0 && (
+          <div className="mt-2">
+            <p className="text-xs font-medium text-yellow-800">Available Audio Files:</p>
+            <div className="text-xs text-yellow-600 max-h-20 overflow-y-auto">
+              {safeAudioFiles.map(file => (
+                <div key={file.id} className="flex justify-between">
+                  <span>{file.name || file.originalName}:</span>
+                  <span className="font-mono text-green-600">{file.duration || 'Unknown'}s</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Audio Error Debug */}
+        {audioError && (
+          <div className="mt-2">
+            <p className="text-xs font-medium text-red-800">Audio API Error Details:</p>
+            <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
+              <p>Status: {audioError.response?.status || 'Network Error'}</p>
+              <p>Message: {audioError.message}</p>
+              {audioError.response?.data?.message && (
+                <p>Server: {audioError.response.data.message}</p>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Device Status Debug */}
         {devices.length > 0 && (
           <div className="mt-2">
-            <p className="text-xs font-medium text-yellow-800">All Device Status:</p>
-            <div className="text-xs text-yellow-600 max-h-32 overflow-y-auto">
+            <p className="text-xs font-medium text-yellow-800">Device Status:</p>
+            <div className="text-xs text-yellow-600 max-h-20 overflow-y-auto">
               {devices.map(device => (
                 <div key={device.deviceId} className="flex justify-between">
                   <span>{device.deviceName}:</span>
@@ -274,15 +383,29 @@ const CreateCampaign = () => {
             </div>
           </div>
         )}
+        
+        {/* Warnings */}
         {safeOnlineDevices.length === 0 && devices.length > 0 && (
           <div className="mt-2 p-2 bg-red-100 border border-red-200 rounded">
-            <p className="text-xs font-medium text-red-800">⚠️ NO ONLINE DEVICES FOUND!</p>
-            <p className="text-xs text-red-600">All devices are offline. Check device connectivity.</p>
+            <p className="text-xs font-medium text-red-800">⚠️ NO ONLINE DEVICES!</p>
           </div>
         )}
+        
+        {safeAudioFiles.length === 0 && !audioLoading && (
+          <div className="mt-2 p-2 bg-red-100 border border-red-200 rounded">
+            <p className="text-xs font-medium text-red-800">⚠️ NO AUDIO FILES FOUND!</p>
+            <p className="text-xs text-red-600">
+              {audioError ? 'API Error - Check server connection' : 'Upload audio files first.'}
+            </p>
+            {audioError?.response?.status === 401 && (
+              <p className="text-xs text-red-600">Authentication required - Please login again.</p>
+            )}
+          </div>
+        )}
+        
         <div className="mt-2 text-xs text-yellow-600">
-          <p>API Endpoint: /api/devices</p>
           <p>Last Updated: {new Date().toLocaleTimeString()}</p>
+          <p>API Base URL: {window.location.origin.includes('localhost') ? 'localhost:8090' : 'ivr.wxon.in'}</p>
         </div>
       </div>
 

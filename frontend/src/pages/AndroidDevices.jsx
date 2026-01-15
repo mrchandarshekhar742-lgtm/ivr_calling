@@ -241,25 +241,6 @@ const AndroidDevices = () => {
             <p className="mt-1 text-sm text-gray-500">
               Install the IVR Manager app on your Android device and connect to get started.
             </p>
-            <div className="mt-6">
-              <button
-                onClick={() => {
-                  const link = document.createElement('a');
-                  link.href = '/ivr-manager-latest.apk';
-                  link.download = 'ivr-manager-latest.apk';
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                  toast.success('APK download started');
-                }}
-                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Download APK
-              </button>
-            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -374,31 +355,12 @@ const AndroidDevices = () => {
             <h3 className="text-sm font-medium text-blue-800">How to connect your Android device</h3>
             <div className="mt-2 text-sm text-blue-700">
               <ol className="list-decimal list-inside space-y-1">
-                <li>Download and install the IVR Manager APK on your Android device</li>
+                <li>Install the IVR Manager app on your Android device</li>
                 <li>Open the app and login with your account credentials</li>
                 <li>Tap "Connect to Server" to register your device</li>
                 <li>Your device will appear in this list as "Online" when connected</li>
                 <li>You can now use this device for IVR calling campaigns</li>
               </ol>
-            </div>
-            <div className="mt-4">
-              <button
-                onClick={() => {
-                  const link = document.createElement('a');
-                  link.href = '/ivr-manager-latest.apk';
-                  link.download = 'ivr-manager-latest.apk';
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                  toast.success('APK download started');
-                }}
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Download IVR Manager APK
-              </button>
             </div>
           </div>
         </div>

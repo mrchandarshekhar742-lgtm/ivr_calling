@@ -15,11 +15,14 @@ import Contacts from './pages/Contacts.jsx';
 import AudioFiles from './pages/AudioFiles.jsx';
 import CallScheduler from './pages/CallScheduler.jsx';
 import CallLogs from './pages/CallLogs.jsx';
+import LiveCallMonitor from './pages/LiveCallMonitor.jsx';
 import AndroidDevices from './pages/AndroidDevices.jsx';
 import MultiDeviceMonitor from './pages/MultiDeviceMonitor.jsx';
 import Analytics from './pages/Analytics.jsx';
 import Profile from './pages/Profile.jsx';
 import Settings from './pages/Settings.jsx';
+import IVRFlows from './pages/IVRFlows.jsx';
+import IVRFlowBuilder from './pages/IVRFlowBuilder.jsx';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -166,6 +169,15 @@ function App() {
         />
         
         <Route 
+          path="/live-monitor" 
+          element={
+            <ProtectedRoute>
+              <LiveCallMonitor />
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
           path="/devices" 
           element={
             <ProtectedRoute>
@@ -206,6 +218,24 @@ function App() {
           element={
             <ProtectedRoute>
               <Settings />
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/ivr-flows" 
+          element={
+            <ProtectedRoute>
+              <IVRFlows />
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/ivr-flows/:id/builder" 
+          element={
+            <ProtectedRoute>
+              <IVRFlowBuilder />
             </ProtectedRoute>
           } 
         />

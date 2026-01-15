@@ -413,3 +413,84 @@ router.delete('/:callId', auth, async (req, res) => {
     });
   }
 });
+
+// @route   POST /api/call-logs/:callId/ivr-navigation
+// @desc    Track IVR navigation path (for interactive IVR flows)
+// @access  Private
+router.post('/:callId/ivr-navigation', auth, [
+  body('nodeKey').trim().isLength({ min: 1 }),
+  body('dtmfPressed').optional().trim().isLength({ max: 1 }),
+  body('timestamp').optional().isISO8601()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid input',
+        errors: errors.array()
+      });
+    }
+
+    const callLog = await CallLog.findOne({
+      where: { 
+        callId: req.params.callId,
+        userId: req.user.id 
+      }
+    });
+
+    if (!callLog) {
+      return res.status(404).json({
+        success: false,
+        message: 'Call log not found'
+      });
+    }
+
+    const { nodeKey, dtmfPressed, timestamp } = req.body;
+
+    // Add to IVR path
+    const ivrPath = callLog.ivrPath || [];
+    ivrPath.push({
+      nodeKey,
+      dtmfPressed: dtmfPressed || null,
+      timestamp: timestamp || new Date().toISOString()
+    });
+
+    // Add to DTMF responses if DTMF was pressed
+    const dtmfResponses = callLog.dtmfResponses || [];
+    if (dtmfPressed) {
+      dtmfResponses.push({
+        key: dtmfPressed,
+        nodeKey,
+        timestamp: timestamp || new Date().toISOString()
+      });
+    }
+
+    await callLog.update({
+      ivrPath,
+      dtmfResponses,
+      currentNodeKey: nodeKey
+    });
+
+    logger.info(`IVR navigation tracked: ${req.params.callId} -> ${nodeKey} (DTMF: ${dtmfPressed || 'none'})`);
+
+    res.json({
+      success: true,
+      message: 'IVR navigation tracked successfully',
+      data: {
+        callId: req.params.callId,
+        nodeKey,
+        dtmfPressed,
+        ivrPath
+      }
+    });
+  } catch (error) {
+    logger.error('Track IVR navigation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+module.exports = router;

@@ -58,13 +58,25 @@ router.post('/', auth, [
   body('name').trim().isLength({ min: 3, max: 100 }),
   body('description').optional().trim(),
   body('type').isIn(['broadcast', 'survey', 'notification', 'reminder', 'bulk', 'scheduled', 'triggered']),
-  body('audioFileId').optional().isInt(),
+  body('audioFileId').optional({ nullable: true, checkFalsy: true }).isInt(),
   body('contactNumbers').optional().isArray(),
   body('selectedDevices').optional().isArray()
 ], async (req, res) => {
   try {
+    console.log('📥 Campaign creation request body:', JSON.stringify(req.body, null, 2));
+    console.log('📋 Request validation check:', {
+      name: req.body.name,
+      nameLength: req.body.name?.length,
+      type: req.body.type,
+      audioFileId: req.body.audioFileId,
+      audioFileIdType: typeof req.body.audioFileId,
+      contactNumbers: Array.isArray(req.body.contactNumbers),
+      selectedDevices: Array.isArray(req.body.selectedDevices)
+    });
+    
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('❌ Validation errors:', errors.array());
       return res.status(400).json({
         success: false,
         message: 'Invalid input',
@@ -309,7 +321,7 @@ router.post('/:id/start', auth, async (req, res) => {
     // Sort devices by performance weight (best first)
     devicePerformance.sort((a, b) => b.weight - a.weight);
 
-    // Distribute contacts with load balancing
+    // Distribute contacts with controlled call flow (prevent continuous calling)
     const distribution = [];
     const totalContacts = contacts.length;
     let remainingContacts = [...contacts];
@@ -329,7 +341,7 @@ router.post('/:id/start', auth, async (req, res) => {
       
       if (deviceContacts.length === 0) break;
 
-      // Create call commands for this device with staggered timing
+      // Create call commands with controlled timing to prevent continuous calling
       const commands = deviceContacts.map((contact, index) => ({
         action: 'make_call',
         phoneNumber: contact.phone,
@@ -339,12 +351,18 @@ router.post('/:id/start', auth, async (req, res) => {
         contactId: contact.id,
         timestamp: new Date().toISOString(),
         deviceId: device.deviceId,
-        delay: index * 2000, // 2 second delay between calls per device
-        priority: 'normal'
+        delay: index * 60000, // 60 second delay between calls per device (prevent continuous calling)
+        priority: 'normal',
+        maxRetries: 2, // Limit retries to prevent endless calling
+        retryDelay: 300000 // 5 minute delay between retries
       }));
 
-      // Add commands to device's pending queue
-      const currentCommands = device.pendingCommands || [];
+      // Clear existing commands for this campaign to prevent duplicates
+      const currentCommands = (device.pendingCommands || []).filter(cmd => 
+        !cmd.campaignId || cmd.campaignId.toString() !== campaign.id.toString()
+      );
+      
+      // Add new commands to device's pending queue
       device.pendingCommands = [...currentCommands, ...commands];
       await device.save();
 
@@ -353,10 +371,11 @@ router.post('/:id/start', auth, async (req, res) => {
         deviceName: device.deviceName,
         contactsAssigned: deviceContacts.length,
         successRate: devicePerformance[i].successRate,
-        estimatedDuration: deviceContacts.length * 45 // 45 seconds per call estimate
+        estimatedDuration: deviceContacts.length * 90, // 90 seconds per call estimate (including delays)
+        callInterval: '60 seconds' // Show call interval to user
       });
       
-      logger.info(`Assigned ${deviceContacts.length} contacts to device ${device.deviceId} (Success Rate: ${(devicePerformance[i].successRate * 100).toFixed(1)}%)`);
+      logger.info(`Assigned ${deviceContacts.length} contacts to device ${device.deviceId} with 60s intervals (Success Rate: ${(devicePerformance[i].successRate * 100).toFixed(1)}%)`);
     }
 
     // Update campaign with distribution info
@@ -397,7 +416,7 @@ router.post('/:id/start', auth, async (req, res) => {
 });
 
 // @route   POST /api/campaigns/:id/pause
-// @desc    Pause campaign
+// @desc    Pause campaign and clear pending commands
 // @access  Private
 router.post('/:id/pause', auth, async (req, res) => {
   try {
@@ -415,22 +434,38 @@ router.post('/:id/pause', auth, async (req, res) => {
       });
     }
 
-    if (!campaign.canPause()) {
+    if (!['running', 'active'].includes(campaign.status)) {
       return res.status(400).json({
         success: false,
-        message: 'Campaign cannot be paused in current state'
+        message: 'Only running campaigns can be paused'
       });
+    }
+
+    // Clear pending commands for this campaign from all devices
+    const { Device } = require('../models');
+    const devices = await Device.findAll({
+      where: { userId: req.user.id }
+    });
+
+    for (const device of devices) {
+      if (device.pendingCommands && device.pendingCommands.length > 0) {
+        // Remove commands for this campaign
+        device.pendingCommands = device.pendingCommands.filter(cmd => 
+          !cmd.campaignId || cmd.campaignId.toString() !== req.params.id
+        );
+        await device.save();
+      }
     }
 
     await campaign.update({
       status: 'paused'
     });
 
-    logger.info(`Campaign paused: ${campaign.name} by ${req.user.email}`);
+    logger.info(`Campaign paused and commands cleared: ${campaign.name} by ${req.user.email}`);
 
     res.json({
       success: true,
-      message: 'Campaign paused successfully',
+      message: 'Campaign paused and pending calls cleared successfully',
       data: campaign
     });
   } catch (error) {
@@ -443,7 +478,7 @@ router.post('/:id/pause', auth, async (req, res) => {
 });
 
 // @route   POST /api/campaigns/:id/stop
-// @desc    Stop campaign
+// @desc    Stop campaign and clear all pending commands
 // @access  Private
 router.post('/:id/stop', auth, async (req, res) => {
   try {
@@ -461,11 +496,30 @@ router.post('/:id/stop', auth, async (req, res) => {
       });
     }
 
-    if (!campaign.canStop()) {
+    if (!['running', 'active', 'paused'].includes(campaign.status)) {
       return res.status(400).json({
         success: false,
         message: 'Campaign cannot be stopped in current state'
       });
+    }
+
+    // Clear all pending commands for this campaign from all devices
+    const { Device } = require('../models');
+    const devices = await Device.findAll({
+      where: { userId: req.user.id }
+    });
+
+    let clearedCommands = 0;
+    for (const device of devices) {
+      if (device.pendingCommands && device.pendingCommands.length > 0) {
+        const originalCount = device.pendingCommands.length;
+        // Remove commands for this campaign
+        device.pendingCommands = device.pendingCommands.filter(cmd => 
+          !cmd.campaignId || cmd.campaignId.toString() !== req.params.id
+        );
+        clearedCommands += originalCount - device.pendingCommands.length;
+        await device.save();
+      }
     }
 
     await campaign.update({
@@ -473,12 +527,15 @@ router.post('/:id/stop', auth, async (req, res) => {
       completedAt: new Date()
     });
 
-    logger.info(`Campaign stopped: ${campaign.name} by ${req.user.email}`);
+    logger.info(`Campaign stopped and ${clearedCommands} pending commands cleared: ${campaign.name} by ${req.user.email}`);
 
     res.json({
       success: true,
-      message: 'Campaign stopped successfully',
-      data: campaign
+      message: `Campaign stopped successfully. ${clearedCommands} pending calls were cancelled.`,
+      data: {
+        ...campaign.toJSON(),
+        clearedCommands
+      }
     });
   } catch (error) {
     logger.error('Stop campaign error:', error);
@@ -554,27 +611,46 @@ router.delete('/:id', auth, async (req, res) => {
       });
     }
 
-    if (!['draft', 'completed', 'cancelled'].includes(campaign.status)) {
+    // Allow deletion of campaigns in more states, including completed
+    if (!['draft', 'completed', 'cancelled', 'failed'].includes(campaign.status)) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot delete active or running campaigns'
+        message: 'Cannot delete active or running campaigns. Please stop the campaign first.'
       });
     }
 
     const campaignName = campaign.name;
+    
+    // Also delete associated contacts and call logs
+    const { Contact, CallLog } = require('../models');
+    
+    // Delete associated call logs
+    await CallLog.destroy({
+      where: { campaignId: campaign.id }
+    });
+    
+    // Delete associated contacts (if they were created specifically for this campaign)
+    await Contact.destroy({
+      where: { 
+        createdBy: req.user.id,
+        campaignId: campaign.id 
+      }
+    });
+    
+    // Delete the campaign
     await campaign.destroy();
 
-    logger.info(`Campaign deleted: ${campaignName} by ${req.user.email}`);
+    logger.info(`Campaign deleted: ${campaignName} by ${req.user.email} (including associated data)`);
 
     res.json({
       success: true,
-      message: 'Campaign deleted successfully'
+      message: 'Campaign and associated data deleted successfully'
     });
   } catch (error) {
     logger.error('Delete campaign error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error: ' + error.message
     });
   }
 });
@@ -799,6 +875,94 @@ router.get('/:id/devices', auth, async (req, res) => {
     });
   } catch (error) {
     logger.error('Get campaign devices error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   GET /api/campaigns/live-calls
+// @desc    Get live call updates for real-time monitoring
+// @access  Private
+router.get('/live-calls', auth, async (req, res) => {
+  try {
+    const { campaignId } = req.query;
+    const { CallLog, Device } = require('../models');
+    
+    const whereClause = { userId: req.user.id };
+    if (campaignId) whereClause.campaignId = campaignId;
+
+    const liveCalls = await CallLog.findAll({
+      where: {
+        ...whereClause,
+        status: 'in_progress'
+      },
+      include: [
+        {
+          model: Device,
+          as: 'device',
+          attributes: ['deviceId', 'deviceName', 'status']
+        }
+      ],
+      order: [['startedAt', 'DESC']],
+      limit: 50
+    });
+
+    const recentCompleted = await CallLog.findAll({
+      where: {
+        ...whereClause,
+        status: ['completed', 'answered', 'no_answer', 'failed'],
+        updatedAt: {
+          [require('sequelize').Op.gte]: new Date(Date.now() - 5 * 60 * 1000) // Last 5 minutes
+        }
+      },
+      include: [
+        {
+          model: Device,
+          as: 'device',
+          attributes: ['deviceId', 'deviceName', 'status']
+        }
+      ],
+      order: [['updatedAt', 'DESC']],
+      limit: 20
+    });
+
+    res.json({
+      success: true,
+      data: {
+        liveCalls: liveCalls.map(call => ({
+          id: call.id,
+          campaignId: call.campaignId,
+          deviceId: call.deviceId,
+          deviceName: call.device?.deviceName || 'Unknown',
+          phoneNumber: call.phoneNumber,
+          status: call.status,
+          duration: call.callDuration || Math.floor((new Date() - new Date(call.startedAt)) / 1000),
+          startedAt: call.startedAt,
+          dtmfResponse: call.dtmfResponse
+        })),
+        recentCompleted: recentCompleted.map(call => ({
+          id: call.id,
+          campaignId: call.campaignId,
+          deviceId: call.deviceId,
+          deviceName: call.device?.deviceName || 'Unknown',
+          phoneNumber: call.phoneNumber,
+          status: call.status,
+          duration: call.callDuration,
+          answered: call.answered,
+          dtmfResponse: call.dtmfResponse,
+          completedAt: call.endedAt || call.updatedAt
+        })),
+        summary: {
+          activeCalls: liveCalls.length,
+          recentlyCompleted: recentCompleted.length,
+          timestamp: new Date().toISOString()
+        }
+      }
+    });
+  } catch (error) {
+    logger.error('Get live calls error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

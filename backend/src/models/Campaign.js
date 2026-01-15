@@ -76,6 +76,20 @@ const Campaign = sequelize.define('Campaign', {
       failedCalls: 0,
       dtmfResponses: {}
     }
+  },
+  totalContacts: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+    allowNull: false
+  },
+  devicesUsed: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+    allowNull: false
+  },
+  deviceDistribution: {
+    type: DataTypes.JSON,
+    defaultValue: []
   }
 }, {
   tableName: 'campaigns'

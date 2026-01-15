@@ -38,7 +38,7 @@ public class PreferenceManager {
         
         // Set default server URL if not exists
         if (getServerUrl() == null) {
-            preferences.edit().putString(KEY_SERVER_URL, "https://ivr.wxon.in").apply();
+            preferences.edit().putString(KEY_SERVER_URL, "http://10.0.2.2:8090").apply(); // Android emulator localhost
         }
         
         // Set default device name if not exists
@@ -53,6 +53,10 @@ public class PreferenceManager {
         editor.putString(KEY_USER_ID, userId);
         editor.putString(KEY_USER_EMAIL, email);
         editor.apply();
+    }
+    
+    public String getToken() {
+        return preferences.getString(KEY_AUTH_TOKEN, null);
     }
     
     public void clearAuthData() {
